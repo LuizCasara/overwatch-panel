@@ -1,4 +1,9 @@
-# claude-overwatch
+![claude-overwatch](https://capsule-render.vercel.app/api?type=rect&color=0:05070a,100:10202e&height=180&section=header&text=claude-overwatch&fontSize=40&fontColor=35b6ff&fontAlignY=40&desc=painel%20local%20de%20sess%C3%B5es%20do%20Claude%20Code&descSize=16&descColor=7c8ba0&descAlignY=68)
+
+[![last commit](https://img.shields.io/github/last-commit/LuizCasara/overwatch-panel?style=flat-square&label=last%20commit&color=3ddc84)](https://github.com/LuizCasara/overwatch-panel/commits/main)
+[![repo size](https://img.shields.io/github/repo-size/LuizCasara/overwatch-panel?style=flat-square&label=size&color=7c8ba0)](https://github.com/LuizCasara/overwatch-panel)
+![node](https://img.shields.io/badge/node-%E2%89%A518-f2c94c?style=flat-square)
+![deps](https://img.shields.io/badge/depend%C3%AAncias-zero-9aa7b8?style=flat-square)
 
 Painel local (HTML, sem servidor) que mostra **todas as sessões ativas do
 Claude Code na sua máquina** em tempo real: projeto, branch, resumo do
@@ -9,7 +14,23 @@ Zero custo de tokens para manter atualizado — tudo é feito por hooks
 (scripts determinísticos que reagem a eventos do Claude Code), não pelo
 próprio Claude escrevendo arquivos.
 
+![Painel com duas sessões ativas e uma arquivada](docs/screenshot.png)
+
+*(dados de exemplo — o painel real reflete suas sessões do Claude Code)*
+
 Ver o design completo em [`docs/design-spec.md`](docs/design-spec.md).
+
+## Como funciona
+
+```mermaid
+flowchart LR
+  CC["Claude Code<br/>(N sessões)"] -->|"hooks: SessionStart, prompt,<br/>todo, waiting, idle, SessionEnd, statusLine"| OW["scripts/overwatch.js<br/>(Node, sem deps)"]
+  OW -->|"lock + escrita atômica"| DATA["~/.claude/overwatch-data/sessions.js<br/>window.CLAUDE_SESSIONS = {...}"]
+  DATA -->|"&lt;script src&gt; recarregado a cada 30s"| PANEL["panel/overwatch.html<br/>(arquivo local, aberto no navegador)"]
+```
+
+Hooks determinísticos, não o próprio Claude, escrevem o estado — por isso o
+custo de tokens é zero e o painel nunca fica desatualizado por "esquecimento".
 
 ## Status
 
