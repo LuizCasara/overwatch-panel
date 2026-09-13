@@ -140,7 +140,7 @@ Todas as ambiguidades identificadas na revisão do `docs/design-spec.md` (seçã
 | OVW-06 | P1: Painel em tempo real | Design | Pending |
 | OVW-07 | P1: Painel em tempo real | Design | Pending |
 | OVW-08 | P1: Painel em tempo real | Design | Pending |
-| OVW-09 | P1: Painel em tempo real | Design | Pending |
+| OVW-09 | P1: Painel em tempo real | Implementing | In Tasks (T4, done) |
 | OVW-10 | P1: Painel em tempo real | Design | Pending |
 | OVW-11 | P2: Progresso de todos | Design | Pending |
 | OVW-12 | P2: Progresso de todos | Design | Pending |

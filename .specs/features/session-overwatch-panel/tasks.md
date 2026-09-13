@@ -144,7 +144,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T4: `withSessionsLock`
+### T4: `withSessionsLock` ✅ Done
 
 **What**: Adiciona `withSessionsLock(dataDir, mutateFn)`: adquire `sessions.js.lock` via `fs.openSync(path, 'wx')` com até 10 tentativas em backoff linear (50ms, 100ms, ..., 500ms), remove o lock se seu mtime for > 5000ms (órfão) antes de re-tentar, executa `mutateFn(loadSessions())`, grava via `writeSessionsFile`, libera o lock no `finally`.
 **Where**: `scripts/overwatch.js`

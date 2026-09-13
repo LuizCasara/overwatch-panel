@@ -74,6 +74,75 @@ function writeSessionsFile(sessions, dataDir = DEFAULT_DATA_DIR) {
   fs.renameSync(tmpPath, filePath);
 }
 
+const LOCK_MAX_ATTEMPTS = 10;
+const LOCK_BACKOFF_STEP_MS = 50;
+const LOCK_STALE_MS = 5000;
+
+function lockFilePath(dataDir) {
+  return path.join(dataDir, 'sessions.js.lock');
+}
+
+function sleepSync(ms) {
+  const sab = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(sab, 0, 0, ms);
+}
+
+function isLockStale(lockPath) {
+  try {
+    const stat = fs.statSync(lockPath);
+    return Date.now() - stat.mtimeMs > LOCK_STALE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function acquireLock(dataDir) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const lockPath = lockFilePath(dataDir);
+  for (let attempt = 0; attempt < LOCK_MAX_ATTEMPTS; attempt++) {
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      fs.writeSync(fd, String(process.pid));
+      fs.closeSync(fd);
+      return true;
+    } catch (err) {
+      if (err.code !== 'EEXIST') return false;
+      if (isLockStale(lockPath)) {
+        try {
+          fs.unlinkSync(lockPath);
+        } catch {
+          // Removed by someone else in the meantime - fine, retry.
+        }
+        continue;
+      }
+      sleepSync(LOCK_BACKOFF_STEP_MS * (attempt + 1));
+    }
+  }
+  return false;
+}
+
+function releaseLock(dataDir) {
+  try {
+    fs.unlinkSync(lockFilePath(dataDir));
+  } catch {
+    // Already gone - fine.
+  }
+}
+
+function withSessionsLock(dataDir, mutateFn) {
+  if (!acquireLock(dataDir)) {
+    logError('lock', 'could not acquire sessions.js.lock after retries', dataDir);
+    return;
+  }
+  try {
+    const sessions = loadSessions(dataDir);
+    mutateFn(sessions);
+    writeSessionsFile(sessions, dataDir);
+  } finally {
+    releaseLock(dataDir);
+  }
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -82,4 +151,6 @@ module.exports = {
   sessionsFilePath,
   loadSessions,
   writeSessionsFile,
+  lockFilePath,
+  withSessionsLock,
 };

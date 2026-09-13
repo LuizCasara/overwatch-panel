@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawn } = require('child_process');
 
 const {
   parseJsonSafe,
@@ -14,6 +14,8 @@ const {
   sessionsFilePath,
   loadSessions,
   writeSessionsFile,
+  lockFilePath,
+  withSessionsLock,
 } = require('./overwatch.js');
 
 function tmpDir() {
@@ -108,4 +110,59 @@ test('writeSessionsFile leaves no orphan .tmp file behind', () => {
   const leftovers = fs.readdirSync(dir).filter(f => f.endsWith('.tmp'));
   assert.deepEqual(leftovers, []);
   assert.equal(fs.existsSync(sessionsFilePath(dir)), true);
+});
+
+// --- withSessionsLock --------------------------------------------------------
+
+function spawnLockedWriter(dataDir, key, delayMs) {
+  const script = `
+    const { withSessionsLock } = require(${JSON.stringify(path.join(__dirname, 'overwatch.js'))});
+    withSessionsLock(${JSON.stringify(dataDir)}, sessions => {
+      const start = Date.now();
+      while (Date.now() - start < ${delayMs}) { /* simulate held lock */ }
+      sessions[${JSON.stringify(key)}] = { session_id: ${JSON.stringify(key)} };
+    });
+  `;
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['-e', script]);
+    child.on('error', reject);
+    child.on('exit', code => (code === 0 ? resolve() : reject(new Error(`exit ${code}`))));
+  });
+}
+
+test('withSessionsLock serializes two concurrent writers - neither mutation is lost', async () => {
+  const dir = tmpDir();
+  await Promise.all([spawnLockedWriter(dir, 'a', 150), spawnLockedWriter(dir, 'b', 150)]);
+  const sessions = loadSessions(dir);
+  assert.deepEqual(Object.keys(sessions).sort(), ['a', 'b']);
+});
+
+test('withSessionsLock removes a stale lock (mtime > 5s) and proceeds', () => {
+  const dir = tmpDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const stalePath = lockFilePath(dir);
+  fs.writeFileSync(stalePath, '999999');
+  const oldTime = new Date(Date.now() - 10_000);
+  fs.utimesSync(stalePath, oldTime, oldTime);
+
+  const start = Date.now();
+  withSessionsLock(dir, sessions => {
+    sessions.fresh = { session_id: 'fresh' };
+  });
+  const elapsedMs = Date.now() - start;
+
+  assert.deepEqual(loadSessions(dir), { fresh: { session_id: 'fresh' } });
+  // Should not have exhausted the ~2.75s of backoff retries - stale lock is
+  // detected and removed on the first attempt.
+  assert.ok(elapsedMs < 1000, `expected fast recovery, took ${elapsedMs}ms`);
+});
+
+test('withSessionsLock always releases the lock, even when mutateFn throws', () => {
+  const dir = tmpDir();
+  assert.throws(() => {
+    withSessionsLock(dir, () => {
+      throw new Error('boom');
+    });
+  }, /boom/);
+  assert.equal(fs.existsSync(lockFilePath(dir)), false);
 });
