@@ -601,7 +601,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T23: `.gitignore`
+### T23: `.gitignore` ✅ Done
 
 **What**: Cria `.gitignore` cobrindo os artefatos gerados por `install.mjs` que não devem ser versionados: `panel/panel-config.js`, `scripts/statusline-original-command.txt`.
 **Where**: `.gitignore`
