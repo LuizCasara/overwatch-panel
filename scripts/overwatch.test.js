@@ -17,6 +17,7 @@ const {
   lockFilePath,
   withSessionsLock,
   resolveBranch,
+  handleSessionStart,
 } = require('./overwatch.js');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -181,4 +182,29 @@ test('resolveBranch returns the current branch for a real git repo', () => {
 test('resolveBranch returns null for a directory that is not a git repo', () => {
   const dir = tmpDir();
   assert.equal(resolveBranch(dir), null);
+});
+
+// --- handleSessionStart ------------------------------------------------------
+
+test('handleSessionStart creates a full Session entry from a valid payload', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  const entry = sessions.abc;
+  assert.equal(entry.session_id, 'abc');
+  assert.equal(entry.cwd, REPO_ROOT);
+  assert.equal(entry.project, path.basename(REPO_ROOT));
+  assert.equal(typeof entry.branch, 'string');
+  assert.equal(entry.summary, '');
+  assert.equal(typeof entry.started_at, 'string');
+  assert.equal(entry.started_at, entry.last_update);
+  assert.equal(entry.ended_at, null);
+  assert.equal(entry.context_pct, null);
+  assert.equal(entry.status, 'running');
+  assert.deepEqual(entry.todos, []);
+});
+
+test('handleSessionStart derives project as the basename of a Windows-style cwd', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'win', cwd: 'C:\\projects\\site\\site-casara' });
+  assert.equal(sessions.win.project, 'site-casara');
 });

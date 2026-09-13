@@ -158,6 +158,26 @@ function resolveBranch(cwd) {
   }
 }
 
+function handleSessionStart(sessions, payload) {
+  const sessionId = payload.session_id;
+  if (!sessionId) return;
+  const now = new Date().toISOString();
+  const cwd = payload.cwd || '';
+  sessions[sessionId] = {
+    session_id: sessionId,
+    project: cwd ? path.basename(cwd) : '',
+    cwd,
+    branch: cwd ? resolveBranch(cwd) : null,
+    summary: '',
+    started_at: now,
+    last_update: now,
+    ended_at: null,
+    context_pct: null,
+    status: 'running',
+    todos: [],
+  };
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -169,4 +189,5 @@ module.exports = {
   lockFilePath,
   withSessionsLock,
   resolveBranch,
+  handleSessionStart,
 };

@@ -193,7 +193,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T6: `handleSessionStart`
+### T6: `handleSessionStart` ✅ Done
 
 **What**: Adiciona `handleSessionStart(sessions, payload)`: cria/sobrescreve `sessions[payload.session_id]` com `project` (basename de `payload.cwd`), `cwd`, `branch` (via `resolveBranch`), `started_at`/`last_update` (timestamp corrente ISO), `ended_at: null`, `context_pct: null`, `status: "running"`, `todos: []`, `summary: ""`.
 **Where**: `scripts/overwatch.js`
