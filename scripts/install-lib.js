@@ -3,6 +3,7 @@
 // CLI para serem testaveis sobre objetos em memoria, sem tocar o
 // ~/.claude/settings.json real do usuario.
 
+const fs = require('fs');
 const path = require('path');
 
 const HOOK_TABLE = [
@@ -39,4 +40,33 @@ function mergeHooks(settings, repoRoot) {
   return result;
 }
 
-module.exports = { HOOK_TABLE, overwatchCommand, mergeHooks };
+function statuslineOriginalCommandPath(repoRoot) {
+  return path.join(repoRoot, 'scripts', 'statusline-original-command.txt');
+}
+
+function statuslineWrapperCommand(repoRoot) {
+  return `bash "${path.join(repoRoot, 'scripts', 'statusline-wrapper.sh')}"`;
+}
+
+function mergeStatusLine(settings, repoRoot) {
+  const wrapperCommand = statuslineWrapperCommand(repoRoot);
+  const current = settings.statusLine && settings.statusLine.command;
+  if (current === wrapperCommand) {
+    return settings;
+  }
+  const originalCmdPath = statuslineOriginalCommandPath(repoRoot);
+  if (current && !fs.existsSync(originalCmdPath)) {
+    fs.mkdirSync(path.dirname(originalCmdPath), { recursive: true });
+    fs.writeFileSync(originalCmdPath, current);
+  }
+  return { ...settings, statusLine: { type: 'command', command: wrapperCommand } };
+}
+
+module.exports = {
+  HOOK_TABLE,
+  overwatchCommand,
+  mergeHooks,
+  statuslineOriginalCommandPath,
+  statuslineWrapperCommand,
+  mergeStatusLine,
+};

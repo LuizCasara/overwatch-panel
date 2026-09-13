@@ -148,7 +148,7 @@ Todas as ambiguidades identificadas na revisão do `docs/design-spec.md` (seçã
 | OVW-14 | P2: Progresso de todos | Design | Pending |
 | OVW-15 | P3: Instalação portátil | Design | Pending |
 | OVW-16 | P3: Instalação portátil | Design | Pending |
-| OVW-17 | P3: Instalação portátil | Implementing | In Tasks (T15 wrapper feito; T17 install.mjs pendente) |
+| OVW-17 | P3: Instalação portátil | Implementing | In Tasks (T15, T17, done) |
 | OVW-18 | P3: Instalação portátil | Implementing | In Tasks (T14, done) |
 | OVW-19 | P3: Instalação portátil | Implementing | In Tasks (T14, done) |
 

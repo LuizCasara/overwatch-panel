@@ -1,8 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeHooks } from './install-lib.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { mergeHooks, mergeStatusLine, statuslineOriginalCommandPath, statuslineWrapperCommand } from './install-lib.js';
 
 const REPO_ROOT = 'C:\\projects\\claude-overwatch';
+
+function tmpRepoRoot() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'overwatch-install-test-'));
+}
 
 test('mergeHooks produces all 6 expected hook groups from an empty settings object', () => {
   const result = mergeHooks({}, REPO_ROOT);
@@ -58,4 +65,34 @@ test('mergeHooks is idempotent - applying it twice does not duplicate groups', (
   const once = mergeHooks({}, REPO_ROOT);
   const twice = mergeHooks(once, REPO_ROOT);
   assert.deepEqual(twice, once);
+});
+
+// --- mergeStatusLine ---------------------------------------------------------
+
+test('mergeStatusLine saves the original command and points to the wrapper', () => {
+  const repoRoot = tmpRepoRoot();
+  const settings = { statusLine: { command: 'bash ~/.claude/statusline-command.sh' } };
+  const result = mergeStatusLine(settings, repoRoot);
+
+  assert.equal(result.statusLine.command, statuslineWrapperCommand(repoRoot));
+  const saved = fs.readFileSync(statuslineOriginalCommandPath(repoRoot), 'utf8');
+  assert.equal(saved, 'bash ~/.claude/statusline-command.sh');
+});
+
+test('mergeStatusLine is idempotent - a second run keeps the saved original untouched', () => {
+  const repoRoot = tmpRepoRoot();
+  const settings = { statusLine: { command: 'bash ~/.claude/statusline-command.sh' } };
+  const once = mergeStatusLine(settings, repoRoot);
+  const twice = mergeStatusLine(once, repoRoot);
+
+  assert.equal(twice.statusLine.command, statuslineWrapperCommand(repoRoot));
+  const saved = fs.readFileSync(statuslineOriginalCommandPath(repoRoot), 'utf8');
+  assert.equal(saved, 'bash ~/.claude/statusline-command.sh');
+});
+
+test('mergeStatusLine configures the wrapper even when statusLine was never set', () => {
+  const repoRoot = tmpRepoRoot();
+  const result = mergeStatusLine({}, repoRoot);
+  assert.equal(result.statusLine.command, statuslineWrapperCommand(repoRoot));
+  assert.equal(fs.existsSync(statuslineOriginalCommandPath(repoRoot)), false);
 });

@@ -456,7 +456,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T17: `mergeStatusLine(settings, repoRoot)`
+### T17: `mergeStatusLine(settings, repoRoot)` ✅ Done
 
 **What**: Adiciona `mergeStatusLine(settings, repoRoot)` a `scripts/install-lib.js`: se `settings.statusLine.command` não referenciar `statusline-wrapper.sh` deste repo, grava o comando atual em `scripts/statusline-original-command.txt` (só se esse arquivo ainda não existir - nunca sobrescreve um original já salvo) e substitui `settings.statusLine` por `{type: "command", command: "bash \"<repoRoot>/scripts/statusline-wrapper.sh\""}`. Se já apontar para o wrapper, é no-op.
 **Where**: `scripts/install-lib.js`
