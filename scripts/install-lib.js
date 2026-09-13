@@ -1,0 +1,42 @@
+'use strict';
+// Funcoes puras usadas por install.mjs - mantidas em CommonJS e separadas do
+// CLI para serem testaveis sobre objetos em memoria, sem tocar o
+// ~/.claude/settings.json real do usuario.
+
+const path = require('path');
+
+const HOOK_TABLE = [
+  { event: 'SessionStart', matcher: undefined, subEvent: 'session-start' },
+  { event: 'UserPromptSubmit', matcher: undefined, subEvent: 'prompt' },
+  { event: 'PostToolUse', matcher: 'TodoWrite', subEvent: 'todo' },
+  { event: 'PreToolUse', matcher: 'AskUserQuestion|ExitPlanMode', subEvent: 'waiting' },
+  { event: 'Stop', matcher: undefined, subEvent: 'idle' },
+  { event: 'SessionEnd', matcher: undefined, subEvent: 'session-end' },
+];
+
+function overwatchCommand(repoRoot, subEvent) {
+  const scriptPath = path.join(repoRoot, 'scripts', 'overwatch.js');
+  return `node "${scriptPath}" ${subEvent}`;
+}
+
+function hasCommand(group, command) {
+  return Array.isArray(group.hooks) && group.hooks.some(h => h && h.command === command);
+}
+
+function mergeHooks(settings, repoRoot) {
+  const result = { ...settings, hooks: { ...(settings.hooks || {}) } };
+  for (const { event, matcher, subEvent } of HOOK_TABLE) {
+    const command = overwatchCommand(repoRoot, subEvent);
+    const groups = result.hooks[event] ? [...result.hooks[event]] : [];
+    const alreadyPresent = groups.some(group => hasCommand(group, command));
+    if (!alreadyPresent) {
+      const newGroup = { hooks: [{ type: 'command', command, async: true }] };
+      if (matcher !== undefined) newGroup.matcher = matcher;
+      groups.push(newGroup);
+    }
+    result.hooks[event] = groups;
+  }
+  return result;
+}
+
+module.exports = { HOOK_TABLE, overwatchCommand, mergeHooks };

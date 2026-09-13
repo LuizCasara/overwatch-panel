@@ -432,7 +432,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T16: `mergeHooks(settings, repoRoot)`
+### T16: `mergeHooks(settings, repoRoot)` ✅ Done
 
 **What**: Cria `scripts/install-lib.js` (ou seção de `install.mjs` exportável para teste) com `mergeHooks(settings, repoRoot)`: para cada evento da tabela de hooks da spec (`SessionStart`, `UserPromptSubmit`, `PostToolUse`/`TodoWrite`, `PreToolUse`/`AskUserQuestion|ExitPlanMode`, `Stop`, `SessionEnd`), garante um grupo `{matcher?, hooks: [{type: "command", command: "node \"<repoRoot>/scripts/overwatch.js\" <sub-evento>", async: true}]}` presente no array daquele evento em `settings.hooks`, sem duplicar (idempotência por `command` exato) e sem remover grupos pré-existentes de outras ferramentas.
 **Where**: `scripts/install-lib.js`
