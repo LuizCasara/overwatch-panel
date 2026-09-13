@@ -621,7 +621,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T24: Atualizar `README.md`
+### T24: Atualizar `README.md` ✅ Done
 
 **What**: Atualiza `README.md`: seção "Status" passa de "Em implementação" para refletir o que está pronto, adiciona seção "Testes" com o comando `npm test`, mantém as instruções de instalação/reinstalação já corretas.
 **Where**: `README.md`

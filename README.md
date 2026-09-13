@@ -13,10 +13,25 @@ Ver o design completo em [`docs/design-spec.md`](docs/design-spec.md).
 
 ## Status
 
-Em implementação (MVP). Ainda não instalar — ver o spec para o desenho
-completo antes de rodar `install.mjs`.
+MVP implementado e testado (`scripts/overwatch.js`, `install.mjs`,
+`panel/overwatch.html`) — ver `.specs/features/session-overwatch-panel/`
+para a spec, o design e a lista completa de tasks. `node install.mjs` ainda
+não foi rodado contra o `~/.claude/settings.json` real desta máquina —
+aguardando o usuário revisar e autorizar essa instalação (ela mescla hooks
+no seu `settings.json` global).
 
-## Instalação (quando implementado)
+## Testes
+
+```bash
+npm test
+```
+
+Roda os testes de `scripts/overwatch.js` (handlers de hook, lock de arquivo,
+dispatch da CLI), `install.mjs` (merge de hooks/statusLine, geração de
+`panel-config.js`) e `panel/format.js` (formatação/cálculo usados pelo
+painel), todos com `node:test` nativo, sem dependências externas.
+
+## Instalação
 
 ```bash
 git clone <url-deste-repo> claude-overwatch
