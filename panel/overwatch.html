@@ -112,13 +112,19 @@
   }
 
   .card {
+    --accent: var(--panel-border);
+    position: relative;
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
+    border-left: 3px solid var(--accent);
     border-radius: 14px;
     padding: 16px;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.02),
+      0 12px 30px -18px rgba(0, 0, 0, 0.7),
+      -10px 0 22px -12px var(--accent);
   }
 
   .card-header {
@@ -255,6 +261,14 @@
     ended: 'ended',
   };
 
+  var STATUS_ACCENT_VAR = {
+    running: 'var(--status-running)',
+    waiting: 'var(--status-waiting)',
+    idle: 'var(--status-idle)',
+    error: 'var(--status-error)',
+    ended: 'var(--status-ended)',
+  };
+
   function escapeHtml(value) {
     var div = document.createElement('div');
     div.textContent = value == null ? '' : String(value);
@@ -280,6 +294,7 @@
   function renderCard(session) {
     var article = document.createElement('article');
     article.className = 'card';
+    article.style.setProperty('--accent', STATUS_ACCENT_VAR[session.status] || STATUS_ACCENT_VAR.idle);
 
     var blipClass = STATUS_BLIP_CLASS[session.status] || 'idle';
     var statusLabel = STATUS_LABEL[session.status] || session.status || '—';
