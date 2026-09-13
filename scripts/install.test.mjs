@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { mergeHooks, mergeStatusLine, statuslineOriginalCommandPath, statuslineWrapperCommand } from './install-lib.js';
+import {
+  mergeHooks,
+  mergeStatusLine,
+  statuslineOriginalCommandPath,
+  statuslineWrapperCommand,
+  panelConfigPath,
+  writePanelConfig,
+} from './install-lib.js';
 
 const REPO_ROOT = 'C:\\projects\\claude-overwatch';
 
@@ -95,4 +102,27 @@ test('mergeStatusLine configures the wrapper even when statusLine was never set'
   const result = mergeStatusLine({}, repoRoot);
   assert.equal(result.statusLine.command, statuslineWrapperCommand(repoRoot));
   assert.equal(fs.existsSync(statuslineOriginalCommandPath(repoRoot)), false);
+});
+
+// --- writePanelConfig ---------------------------------------------------------
+
+test('writePanelConfig writes a valid file:// URL with no raw backslashes', () => {
+  const repoRoot = tmpRepoRoot();
+  const homeDir = 'C:\\Users\\Luiz';
+  writePanelConfig(repoRoot, homeDir);
+  const content = fs.readFileSync(panelConfigPath(repoRoot), 'utf8');
+  assert.match(content, /window\.OVERWATCH_DATA_URL = "file:\/\/\//);
+  assert.match(content, /sessions\.js/);
+  const urlLiteral = content.match(/"(.*)"/)[1];
+  assert.equal(urlLiteral.includes('\\'), false);
+});
+
+test('writePanelConfig overwrites the config when run again with a different home', () => {
+  const repoRoot = tmpRepoRoot();
+  writePanelConfig(repoRoot, 'C:\\Users\\Alice');
+  const first = fs.readFileSync(panelConfigPath(repoRoot), 'utf8');
+  writePanelConfig(repoRoot, 'C:\\Users\\Bob');
+  const second = fs.readFileSync(panelConfigPath(repoRoot), 'utf8');
+  assert.notEqual(first, second);
+  assert.match(second, /Bob/);
 });

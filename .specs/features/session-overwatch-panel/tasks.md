@@ -480,7 +480,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T18: `writePanelConfig(repoRoot, homeDir)`
+### T18: `writePanelConfig(repoRoot, homeDir)` ✅ Done
 
 **What**: Adiciona `writePanelConfig(repoRoot, homeDir)` a `scripts/install-lib.js`: escreve `panel/panel-config.js` com `window.OVERWATCH_DATA_URL = "file:///<homeDir>/.claude/overwatch-data/sessions.js"` (barras normalizadas para URL de arquivo válida no Windows), via tmp+rename atômico.
 **Where**: `scripts/install-lib.js`

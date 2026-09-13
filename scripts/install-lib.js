@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const HOOK_TABLE = [
   { event: 'SessionStart', matcher: undefined, subEvent: 'session-start' },
@@ -62,6 +63,20 @@ function mergeStatusLine(settings, repoRoot) {
   return { ...settings, statusLine: { type: 'command', command: wrapperCommand } };
 }
 
+function panelConfigPath(repoRoot) {
+  return path.join(repoRoot, 'panel', 'panel-config.js');
+}
+
+function writePanelConfig(repoRoot, homeDir) {
+  const dataFilePath = path.join(homeDir, '.claude', 'overwatch-data', 'sessions.js');
+  const fileUrl = pathToFileURL(dataFilePath).href;
+  const configPath = panelConfigPath(repoRoot);
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  const tmpPath = `${configPath}.${process.pid}.tmp`;
+  fs.writeFileSync(tmpPath, `window.OVERWATCH_DATA_URL = ${JSON.stringify(fileUrl)};\n`);
+  fs.renameSync(tmpPath, configPath);
+}
+
 module.exports = {
   HOOK_TABLE,
   overwatchCommand,
@@ -69,4 +84,6 @@ module.exports = {
   statuslineOriginalCommandPath,
   statuslineWrapperCommand,
   mergeStatusLine,
+  panelConfigPath,
+  writePanelConfig,
 };
