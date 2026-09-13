@@ -623,6 +623,28 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ### T24: Atualizar `README.md` ✅ Done
 
+---
+
+## Fix Tasks (pós-Verifier, iteração 1)
+
+Originadas de `.specs/features/session-overwatch-panel/validation.md` (veredito FAIL na 1ª verificação, 2 gaps reais Minor).
+
+### Fix 1: teste de boundary exato do TTL de `isExpired` ✅ Done
+
+**What**: Adiciona um teste em `panel/format.test.js` para o limite exato de 20 minutos (deve ser `false`, já que a spec diz "mais de 20 minutos" = estritamente maior). Corrige o mutante sobrevivente do sensor de discriminação (`>` → `>=` em `panel/format.js:43`) sem alterar código de produção (a implementação já estava correta).
+**Where**: `panel/format.test.js`
+**Requirement**: OVW-13
+**Tests**: unit
+**Gate**: quick (`node --test panel/format.test.js`)
+
+### Fix 2: teste do valor exato do matcher `PreToolUse`/`PostToolUse` ✅ Done
+
+**What**: Adiciona uma asserção em `scripts/install.test.mjs` confirmando `result.hooks.PreToolUse[0].matcher === 'AskUserQuestion|ExitPlanMode'` e `result.hooks.PostToolUse[0].matcher === 'TodoWrite'`. Sem alteração de código de produção.
+**Where**: `scripts/install.test.mjs`
+**Requirement**: OVW-03
+**Tests**: unit
+**Gate**: full (`node --test scripts/install.test.mjs`)
+
 **What**: Atualiza `README.md`: seção "Status" passa de "Em implementação" para refletir o que está pronto, adiciona seção "Testes" com o comando `npm test`, mantém as instruções de instalação/reinstalação já corretas.
 **Where**: `README.md`
 **Depends on**: T19, T22

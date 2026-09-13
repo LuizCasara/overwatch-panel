@@ -41,6 +41,12 @@ test('isExpired is true past the 20 minute TTL and false just under it', () => {
   assert.equal(isExpired(nineteenMinAgo, now), false);
 });
 
+test('isExpired is false at exactly the 20 minute boundary ("mais de 20min" = strictly greater)', () => {
+  const now = Date.now();
+  const exactlyTwentyMinAgo = new Date(now - 20 * 60 * 1000).toISOString();
+  assert.equal(isExpired(exactlyTwentyMinAgo, now), false);
+});
+
 // --- formatElapsed -------------------------------------------------------------
 
 test('formatElapsed formats minutes under an hour and hours+minutes over it', () => {

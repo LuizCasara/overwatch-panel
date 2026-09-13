@@ -36,6 +36,12 @@ test('mergeHooks produces all 6 expected hook groups from an empty settings obje
   }
 });
 
+test('mergeHooks sets the exact matcher values from the hook table (PostToolUse/PreToolUse)', () => {
+  const result = mergeHooks({}, REPO_ROOT);
+  assert.equal(result.hooks.PostToolUse[0].matcher, 'TodoWrite');
+  assert.equal(result.hooks.PreToolUse[0].matcher, 'AskUserQuestion|ExitPlanMode');
+});
+
 test('mergeHooks preserves pre-existing third-party hook groups', () => {
   // Fixture inspired by the user's real ~/.claude/settings.json.
   const settings = {
