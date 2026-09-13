@@ -225,6 +225,16 @@ function handleStatusline(sessions, payload) {
   entry.last_update = new Date().toISOString();
 }
 
+function handleTodo(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry) return;
+  const todos = payload.tool_input && Array.isArray(payload.tool_input.todos)
+    ? payload.tool_input.todos
+    : [];
+  entry.todos = todos;
+  entry.last_update = new Date().toISOString();
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -242,4 +252,5 @@ module.exports = {
   handleIdle,
   handleSessionEnd,
   handleStatusline,
+  handleTodo,
 };

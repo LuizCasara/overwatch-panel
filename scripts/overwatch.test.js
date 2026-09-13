@@ -23,6 +23,7 @@ const {
   handleIdle,
   handleSessionEnd,
   handleStatusline,
+  handleTodo,
 } = require('./overwatch.js');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -318,4 +319,28 @@ test('handleStatusline ignores an unknown session_id', () => {
     handleStatusline(sessions, { session_id: 'ghost', context_window: { used_percentage: 10 } }),
   );
   assert.deepEqual(sessions, {});
+});
+
+// --- handleTodo ----------------------------------------------------------------
+
+test('handleTodo writes todos[] from a real TodoWrite-shaped payload', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  const todos = [
+    { content: 'Ler o brief', status: 'completed' },
+    { content: 'Revisar as 12 secoes (3/12)', status: 'in_progress', activeForm: 'Revisando' },
+  ];
+  handleTodo(sessions, { session_id: 'abc', tool_input: { todos } });
+  assert.deepEqual(sessions.abc.todos, todos);
+});
+
+test('handleTodo writes an empty array when tool_input.todos is malformed', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  assert.doesNotThrow(() => handleTodo(sessions, { session_id: 'abc' }));
+  assert.deepEqual(sessions.abc.todos, []);
+  assert.doesNotThrow(() =>
+    handleTodo(sessions, { session_id: 'abc', tool_input: { todos: 'not-an-array' } }),
+  );
+  assert.deepEqual(sessions.abc.todos, []);
 });

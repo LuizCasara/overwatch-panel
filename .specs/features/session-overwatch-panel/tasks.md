@@ -335,7 +335,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T12: `handleTodo`
+### T12: `handleTodo` ✅ Done
 
 **What**: Adiciona `handleTodo(sessions, payload)`: extrai `payload.tool_input.todos` (array de `{content, status}`) e grava em `sessions[payload.session_id].todos`, junto com `last_update`. Se `tool_input.todos` não for um array, grava `[]` (nunca lança, nunca deixa `todos` `undefined`).
 **Where**: `scripts/overwatch.js`
