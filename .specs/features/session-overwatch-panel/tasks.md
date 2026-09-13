@@ -170,7 +170,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T5: `resolveBranch`
+### T5: `resolveBranch` ✅ Done
 
 **What**: Adiciona `resolveBranch(cwd)`: roda `git rev-parse --abbrev-ref HEAD` síncrono com `cwd` e timeout curto (2000ms); retorna a branch em caso de sucesso, `null` em qualquer falha (não é repo git, timeout, `git` ausente), sem lançar.
 **Where**: `scripts/overwatch.js`

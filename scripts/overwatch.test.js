@@ -16,7 +16,10 @@ const {
   writeSessionsFile,
   lockFilePath,
   withSessionsLock,
+  resolveBranch,
 } = require('./overwatch.js');
+
+const REPO_ROOT = path.join(__dirname, '..');
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'overwatch-test-'));
@@ -165,4 +168,17 @@ test('withSessionsLock always releases the lock, even when mutateFn throws', () 
     });
   }, /boom/);
   assert.equal(fs.existsSync(lockFilePath(dir)), false);
+});
+
+// --- resolveBranch -----------------------------------------------------------
+
+test('resolveBranch returns the current branch for a real git repo', () => {
+  const branch = resolveBranch(REPO_ROOT);
+  assert.equal(typeof branch, 'string');
+  assert.ok(branch.length > 0);
+});
+
+test('resolveBranch returns null for a directory that is not a git repo', () => {
+  const dir = tmpDir();
+  assert.equal(resolveBranch(dir), null);
 });

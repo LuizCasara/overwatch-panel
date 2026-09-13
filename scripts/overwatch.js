@@ -8,6 +8,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const DEFAULT_DATA_DIR = path.join(os.homedir(), '.claude', 'overwatch-data');
 
@@ -143,6 +144,20 @@ function withSessionsLock(dataDir, mutateFn) {
   }
 }
 
+function resolveBranch(cwd) {
+  try {
+    const out = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd,
+      timeout: 2000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const branch = out.toString('utf8').trim();
+    return branch || null;
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -153,4 +168,5 @@ module.exports = {
   writeSessionsFile,
   lockFilePath,
   withSessionsLock,
+  resolveBranch,
 };
