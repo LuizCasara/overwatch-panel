@@ -134,7 +134,7 @@ Todas as ambiguidades identificadas na revisão do `docs/design-spec.md` (seçã
 | --- | --- | --- | --- |
 | OVW-01 | P1: Painel em tempo real | Implementing | In Tasks (T6, done) |
 | OVW-02 | P1: Painel em tempo real | Implementing | In Tasks (T7, done) |
-| OVW-03 | P1: Painel em tempo real | Design | Pending |
+| OVW-03 | P1: Painel em tempo real | Implementing | In Tasks (T8, done) |
 | OVW-04 | P1: Painel em tempo real | Design | Pending |
 | OVW-05 | P1: Painel em tempo real | Design | Pending |
 | OVW-06 | P1: Painel em tempo real | Design | Pending |

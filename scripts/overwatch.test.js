@@ -19,6 +19,7 @@ const {
   resolveBranch,
   handleSessionStart,
   handlePrompt,
+  handleWaiting,
 } = require('./overwatch.js');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -235,4 +236,19 @@ test('handlePrompt creates the session entry when session_id is unknown', () => 
   assert.ok(sessions.new);
   assert.equal(sessions.new.summary, 'primeiro prompt');
   assert.equal(sessions.new.status, 'running');
+});
+
+// --- handleWaiting -------------------------------------------------------------
+
+test('handleWaiting sets status to waiting for an existing session', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  handleWaiting(sessions, { session_id: 'abc' });
+  assert.equal(sessions.abc.status, 'waiting');
+});
+
+test('handleWaiting is a safe no-op for an unknown session_id', () => {
+  const sessions = {};
+  assert.doesNotThrow(() => handleWaiting(sessions, { session_id: 'ghost' }));
+  assert.deepEqual(sessions, {});
 });

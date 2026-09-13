@@ -240,7 +240,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T8: `handleWaiting`
+### T8: `handleWaiting` ✅ Done
 
 **What**: Adiciona `handleWaiting(sessions, payload)`: atualiza `status: "waiting"` e `last_update` na entrada de `payload.session_id`.
 **Where**: `scripts/overwatch.js`

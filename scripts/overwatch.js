@@ -190,6 +190,13 @@ function handlePrompt(sessions, payload) {
   sessions[sessionId].last_update = new Date().toISOString();
 }
 
+function handleWaiting(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry) return;
+  entry.status = 'waiting';
+  entry.last_update = new Date().toISOString();
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -203,4 +210,5 @@ module.exports = {
   resolveBranch,
   handleSessionStart,
   handlePrompt,
+  handleWaiting,
 };
