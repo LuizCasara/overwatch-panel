@@ -214,6 +214,17 @@ function handleSessionEnd(sessions, payload) {
   entry.last_update = now;
 }
 
+function handleStatusline(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry) return;
+  const usedPct = payload.context_window && payload.context_window.used_percentage;
+  if (typeof usedPct !== 'number' || Number.isNaN(usedPct)) return;
+  const contextPct = Math.round(usedPct);
+  if (entry.context_pct === contextPct) return;
+  entry.context_pct = contextPct;
+  entry.last_update = new Date().toISOString();
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -230,4 +241,5 @@ module.exports = {
   handleWaiting,
   handleIdle,
   handleSessionEnd,
+  handleStatusline,
 };

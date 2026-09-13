@@ -137,11 +137,11 @@ Todas as ambiguidades identificadas na revisão do `docs/design-spec.md` (seçã
 | OVW-03 | P1: Painel em tempo real | Implementing | In Tasks (T8, done) |
 | OVW-04 | P1: Painel em tempo real | Implementing | In Tasks (T9, done) |
 | OVW-05 | P1: Painel em tempo real | Implementing | In Tasks (T10, done) |
-| OVW-06 | P1: Painel em tempo real | Design | Pending |
+| OVW-06 | P1: Painel em tempo real | Implementing | In Tasks (T11, done) |
 | OVW-07 | P1: Painel em tempo real | Design | Pending |
 | OVW-08 | P1: Painel em tempo real | Design | Pending |
 | OVW-09 | P1: Painel em tempo real | Implementing | In Tasks (T4, done) |
-| OVW-10 | P1: Painel em tempo real | Design | Pending |
+| OVW-10 | P1: Painel em tempo real | Implementing | In Tasks (T11 grava null; T22 exibe "—") |
 | OVW-11 | P2: Progresso de todos | Design | Pending |
 | OVW-12 | P2: Progresso de todos | Design | Pending |
 | OVW-13 | P2: Progresso de todos | Design | Pending |

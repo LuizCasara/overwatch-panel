@@ -311,7 +311,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T11: `handleStatusline`
+### T11: `handleStatusline` ✅ Done
 
 **What**: Adiciona `handleStatusline(sessions, payload)`: calcula `context_pct` a partir de `payload.context_window.used_percentage` (arredondado para inteiro); só atualiza `sessions[payload.session_id].context_pct` e `last_update` se o valor calculado for diferente do valor já gravado (dedupe por valor, sem throttle de tempo). Se `payload.session_id` não existir na tabela ainda, ignora silenciosamente (sessão não iniciada por hook `session-start` correspondente é fora de escopo - ver Assumptions do spec sobre `session_id` no payload de `statusLine`).
 **Where**: `scripts/overwatch.js`

@@ -22,6 +22,7 @@ const {
   handleWaiting,
   handleIdle,
   handleSessionEnd,
+  handleStatusline,
 } = require('./overwatch.js');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -287,4 +288,34 @@ test('a later handlePrompt on an ended session reopens it idempotently', () => {
   handlePrompt(sessions, { session_id: 'abc', prompt: 'de volta' });
   assert.equal(sessions.abc.status, 'running');
   assert.equal(sessions.abc.ended_at, null);
+});
+
+// --- handleStatusline --------------------------------------------------------
+
+test('handleStatusline updates context_pct when the value changed', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  assert.equal(sessions.abc.context_pct, null);
+  handleStatusline(sessions, { session_id: 'abc', context_window: { used_percentage: 42.3 } });
+  assert.equal(sessions.abc.context_pct, 42);
+});
+
+test('handleStatusline dedupes: same value does not touch last_update', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  handleStatusline(sessions, { session_id: 'abc', context_window: { used_percentage: 42 } });
+  const afterFirst = sessions.abc.last_update;
+  // Force a detectable clock tick so a second write would be observable.
+  sessions.abc.last_update = '2000-01-01T00:00:00.000Z';
+  handleStatusline(sessions, { session_id: 'abc', context_window: { used_percentage: 42 } });
+  assert.equal(sessions.abc.last_update, '2000-01-01T00:00:00.000Z');
+  assert.notEqual(afterFirst, undefined);
+});
+
+test('handleStatusline ignores an unknown session_id', () => {
+  const sessions = {};
+  assert.doesNotThrow(() =>
+    handleStatusline(sessions, { session_id: 'ghost', context_window: { used_percentage: 10 } }),
+  );
+  assert.deepEqual(sessions, {});
 });
