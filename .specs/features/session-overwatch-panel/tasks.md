@@ -216,7 +216,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T7: `handlePrompt`
+### T7: `handlePrompt` ✅ Done
 
 **What**: Adiciona `handlePrompt(sessions, payload)`: se `sessions[payload.session_id]` existir, atualiza `summary` (primeiros 80 caracteres de `payload.prompt`), `status: "running"`, `last_update`; se a sessão não existir ainda (hook `session-start` perdido/fora de ordem), cria uma entrada mínima primeiro (mesmo shape de T6, sem `branch` resolvido de novo se já vier depois) para não descartar o evento.
 **Where**: `scripts/overwatch.js`

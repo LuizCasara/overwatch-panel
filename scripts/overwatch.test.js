@@ -18,6 +18,7 @@ const {
   withSessionsLock,
   resolveBranch,
   handleSessionStart,
+  handlePrompt,
 } = require('./overwatch.js');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -207,4 +208,31 @@ test('handleSessionStart derives project as the basename of a Windows-style cwd'
   const sessions = {};
   handleSessionStart(sessions, { session_id: 'win', cwd: 'C:\\projects\\site\\site-casara' });
   assert.equal(sessions.win.project, 'site-casara');
+});
+
+// --- handlePrompt -------------------------------------------------------------
+
+test('handlePrompt truncates summary to exactly 80 characters', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  const longPrompt = 'x'.repeat(200);
+  handlePrompt(sessions, { session_id: 'abc', prompt: longPrompt });
+  assert.equal(sessions.abc.summary.length, 80);
+  assert.equal(sessions.abc.summary, 'x'.repeat(80));
+});
+
+test('handlePrompt sets status to running even if it was idle or waiting', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  sessions.abc.status = 'waiting';
+  handlePrompt(sessions, { session_id: 'abc', prompt: 'oi' });
+  assert.equal(sessions.abc.status, 'running');
+});
+
+test('handlePrompt creates the session entry when session_id is unknown', () => {
+  const sessions = {};
+  handlePrompt(sessions, { session_id: 'new', cwd: REPO_ROOT, prompt: 'primeiro prompt' });
+  assert.ok(sessions.new);
+  assert.equal(sessions.new.summary, 'primeiro prompt');
+  assert.equal(sessions.new.status, 'running');
 });

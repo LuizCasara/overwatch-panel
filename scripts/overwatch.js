@@ -178,6 +178,18 @@ function handleSessionStart(sessions, payload) {
   };
 }
 
+function handlePrompt(sessions, payload) {
+  const sessionId = payload.session_id;
+  if (!sessionId) return;
+  if (!sessions[sessionId]) {
+    handleSessionStart(sessions, payload);
+  }
+  const prompt = typeof payload.prompt === 'string' ? payload.prompt : '';
+  sessions[sessionId].summary = prompt.slice(0, 80);
+  sessions[sessionId].status = 'running';
+  sessions[sessionId].last_update = new Date().toISOString();
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -190,4 +202,5 @@ module.exports = {
   withSessionsLock,
   resolveBranch,
   handleSessionStart,
+  handlePrompt,
 };
