@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "promote_threshold": 2,
+  "window_days": 45,
+  "quarantine_threshold": 2,
+  "next_id": 5,
+  "lessons": [
+    {
+      "id": "L-001",
+      "key": "surviving_mutant::test ttl threshold comparisons at the exact boundary value not only just inside and just outside it so a vs mutation is caught",
+      "text": "Test TTL/threshold comparisons at the exact boundary value, not only just-inside and just-outside it, so a > vs >= mutation is caught.",
+      "signal": "surviving_mutant",
+      "scope": "testing",
+      "status": "candidate",
+      "features": [
+        "session-overwatch-panel"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "panel/format.js:43 (testing)"
+      ],
+      "created": "2026-09-13T10:44:49Z",
+      "last_seen": "2026-09-13T10:44:49Z"
+    },
+    {
+      "id": "L-002",
+      "key": "spec_precision_gap::when a hook s behavior is scoped by a static matcher config string assert the exact matcher value in a test not just the resulting command string",
+      "text": "When a hook's behavior is scoped by a static matcher/config string, assert the exact matcher value in a test, not just the resulting command string.",
+      "signal": "spec_precision_gap",
+      "scope": "install",
+      "status": "candidate",
+      "features": [
+        "session-overwatch-panel"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "scripts/install-lib.js:14 (install)"
+      ],
+      "created": "2026-09-13T10:44:58Z",
+      "last_seen": "2026-09-13T10:44:58Z"
+    },
+    {
+      "id": "L-003",
+      "key": "spec_precision_gap::when manual verification substitutes a mock for the real external dependency the ac requires exercising disclose it explicitly and treat it as an open coverage gap not full coverage",
+      "text": "When manual verification substitutes a mock for the real external dependency the AC requires exercising, disclose it explicitly and treat it as an open coverage gap, not full coverage.",
+      "signal": "spec_precision_gap",
+      "scope": "verification",
+      "status": "candidate",
+      "features": [
+        "session-overwatch-panel"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "OVW-17 (verification)"
+      ],
+      "created": "2026-09-13T10:44:58Z",
+      "last_seen": "2026-09-13T10:44:58Z"
+    },
+    {
+      "id": "L-004",
+      "key": "spec_deviation::keep process spawning side effects out of pure event handlers wire them at the dispatch main level so handlers stay unit testable without mocking child process",
+      "text": "Keep process-spawning side effects out of pure event handlers; wire them at the dispatch/main level so handlers stay unit-testable without mocking child_process.",
+      "signal": "spec_deviation",
+      "scope": "architecture",
+      "status": "candidate",
+      "features": [
+        "session-overwatch-panel"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "scripts/overwatch.js:278 (architecture)"
+      ],
+      "created": "2026-09-13T10:44:58Z",
+      "last_seen": "2026-09-13T10:44:58Z"
+    }
+  ]
+}
