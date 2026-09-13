@@ -503,7 +503,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T19: CLI `install.mjs`
+### T19: CLI `install.mjs` ✅ Done
 
 **What**: Cria `install.mjs`: lê `~/.claude/settings.json` real (cria `{}` se não existir), aplica `mergeHooks` → `mergeStatusLine` → grava o `settings.json` atualizado via tmp+rename, chama `writePanelConfig`, imprime um resumo legível no stdout (quais hooks foram adicionados/já existiam).
 **Where**: `install.mjs`

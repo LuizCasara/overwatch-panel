@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import {
   mergeHooks,
   mergeStatusLine,
@@ -13,9 +15,14 @@ import {
 } from './install-lib.js';
 
 const REPO_ROOT = 'C:\\projects\\claude-overwatch';
+const REAL_REPO_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 function tmpRepoRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'overwatch-install-test-'));
+}
+
+function tmpHome() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'overwatch-home-test-'));
 }
 
 test('mergeHooks produces all 6 expected hook groups from an empty settings object', () => {
@@ -125,4 +132,31 @@ test('writePanelConfig overwrites the config when run again with a different hom
   const second = fs.readFileSync(panelConfigPath(repoRoot), 'utf8');
   assert.notEqual(first, second);
   assert.match(second, /Bob/);
+});
+
+// --- install.mjs CLI (real subprocess, isolated HOME) -----------------------
+
+function runInstallCli(homeDir) {
+  return execFileSync(process.execPath, [path.join(REAL_REPO_ROOT, 'install.mjs')], {
+    env: { ...process.env, USERPROFILE: homeDir, HOME: homeDir },
+  }).toString('utf8');
+}
+
+test('install.mjs creates settings.json with the expected hooks when none existed', () => {
+  const home = tmpHome();
+  runInstallCli(home);
+  const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
+  assert.ok(Array.isArray(settings.hooks.SessionStart));
+  assert.match(settings.hooks.SessionStart[0].hooks[0].command, /overwatch\.js/);
+  assert.equal(fs.existsSync(path.join(REAL_REPO_ROOT, 'panel', 'panel-config.js')), true);
+});
+
+test('install.mjs run twice does not duplicate hook groups', () => {
+  const home = tmpHome();
+  runInstallCli(home);
+  const settingsPath = path.join(home, '.claude', 'settings.json');
+  const firstSettings = fs.readFileSync(settingsPath, 'utf8');
+  runInstallCli(home);
+  const secondSettings = fs.readFileSync(settingsPath, 'utf8');
+  assert.equal(secondSettings, firstSettings);
 });
