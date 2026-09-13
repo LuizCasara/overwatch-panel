@@ -138,14 +138,14 @@ Todas as ambiguidades identificadas na revisão do `docs/design-spec.md` (seçã
 | OVW-04 | P1: Painel em tempo real | Implementing | In Tasks (T9, done) |
 | OVW-05 | P1: Painel em tempo real | Implementing | In Tasks (T10, done) |
 | OVW-06 | P1: Painel em tempo real | Implementing | In Tasks (T11, done) |
-| OVW-07 | P1: Painel em tempo real | Design | Pending |
-| OVW-08 | P1: Painel em tempo real | Design | Pending |
+| OVW-07 | P1: Painel em tempo real | Implementing | In Tasks (T22, done) |
+| OVW-08 | P1: Painel em tempo real | Implementing | In Tasks (T22, done) |
 | OVW-09 | P1: Painel em tempo real | Implementing | In Tasks (T4, done) |
-| OVW-10 | P1: Painel em tempo real | Implementing | In Tasks (T11 grava null; T22 exibe "—") |
+| OVW-10 | P1: Painel em tempo real | Implementing | In Tasks (T11, T22, done) |
 | OVW-11 | P2: Progresso de todos | Implementing | In Tasks (T12, done) |
-| OVW-12 | P2: Progresso de todos | Design | Pending |
-| OVW-13 | P2: Progresso de todos | Design | Pending |
-| OVW-14 | P2: Progresso de todos | Design | Pending |
+| OVW-12 | P2: Progresso de todos | Implementing | In Tasks (T20, T22, done) |
+| OVW-13 | P2: Progresso de todos | Implementing | In Tasks (T20, T22, done) |
+| OVW-14 | P2: Progresso de todos | Implementing | In Tasks (T22, done) |
 | OVW-15 | P3: Instalação portátil | Implementing | In Tasks (T16, T19, done) |
 | OVW-16 | P3: Instalação portátil | Implementing | In Tasks (T16, done) |
 | OVW-17 | P3: Instalação portátil | Implementing | In Tasks (T15, T17, done) |

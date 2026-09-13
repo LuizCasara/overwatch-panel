@@ -218,35 +218,170 @@
 
   <div id="empty-state" hidden>Nenhuma sessao registrada ainda.</div>
 
-  <main id="active-grid" class="grid">
-    <article class="card">
-      <div class="card-header">
-        <span class="blip running pulsing"></span>
-        <span class="project">claude-overwatch</span>
-        <span class="sep">|</span><span>master</span>
-        <span class="sep">|</span><span>12min</span>
-        <span class="sep">|</span><span>34%</span>
-      </div>
-      <div class="card-summary">card de exemplo - substituido pelos dados reais em T22</div>
-      <div class="overall-bar"><i style="width: 40%"></i></div>
-      <ul class="todos">
-        <li class="todo completed"><span class="mark">✔</span> Ler o brief</li>
-        <li class="todo in_progress">
-          <span class="mark">▸</span>
-          <span>
-            Revisar as 12 secoes do relatorio (3/12)
-            <div class="sub-progress"><i style="width: 25%"></i></div>
-          </span>
-        </li>
-        <li class="todo"><span class="mark">○</span> Escrever resumo final</li>
-      </ul>
-    </article>
-  </main>
+  <main id="active-grid" class="grid"></main>
 
-  <section class="archived">
+  <section class="archived" hidden>
     <h2>Arquivadas</h2>
     <div id="archived-grid" class="grid"></div>
   </section>
 </div>
+<script src="panel-config.js"></script>
+<script src="format.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var POLL_MS = 30000;
+  var activeGrid = document.getElementById('active-grid');
+  var archivedGrid = document.getElementById('archived-grid');
+  var archivedSection = document.querySelector('section.archived');
+  var emptyState = document.getElementById('empty-state');
+  var configMissing = document.getElementById('config-missing');
+
+  var STATUS_LABEL = {
+    running: 'rodando',
+    waiting: 'aguardando voce',
+    idle: 'ocioso',
+    error: 'erro',
+    ended: 'encerrada',
+  };
+
+  var STATUS_BLIP_CLASS = {
+    running: 'running pulsing',
+    waiting: 'waiting pulsing',
+    idle: 'idle',
+    error: 'error',
+    ended: 'ended',
+  };
+
+  function escapeHtml(value) {
+    var div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+  }
+
+  function renderTodoItem(todo) {
+    var li = document.createElement('li');
+    var status = todo && todo.status;
+    li.className = 'todo' + (status ? ' ' + status : '');
+    var mark = status === 'completed' ? '✔' : status === 'in_progress' ? '▸' : '○';
+    var sub = window.OverwatchFormat.extractSubProgress(todo && todo.content);
+    var subHtml = '';
+    if (sub && sub.total > 0) {
+      var pct = Math.round((sub.done / sub.total) * 100);
+      subHtml = '<div class="sub-progress"><i style="width:' + pct + '%"></i></div>';
+    }
+    li.innerHTML =
+      '<span class="mark">' + mark + '</span><span>' + escapeHtml(todo && todo.content) + subHtml + '</span>';
+    return li;
+  }
+
+  function renderCard(session) {
+    var article = document.createElement('article');
+    article.className = 'card';
+
+    var blipClass = STATUS_BLIP_CLASS[session.status] || 'idle';
+    var statusLabel = STATUS_LABEL[session.status] || session.status || '—';
+    var elapsed = window.OverwatchFormat.formatElapsed(session.started_at);
+    var contextLabel =
+      session.context_pct === null || session.context_pct === undefined ? '—' : session.context_pct + '%';
+
+    var header = document.createElement('div');
+    header.className = 'card-header';
+    header.innerHTML =
+      '<span class="blip ' + blipClass + '"></span>' +
+      '<span class="project">' + escapeHtml(session.project || '—') + '</span>' +
+      '<span class="sep">|</span><span>' + escapeHtml(session.branch || '—') + '</span>' +
+      '<span class="sep">|</span><span>' + elapsed + '</span>' +
+      '<span class="sep">|</span><span>' + contextLabel + '</span>' +
+      '<span class="sep">|</span><span>' + statusLabel + '</span>';
+    article.appendChild(header);
+
+    var summary = document.createElement('div');
+    summary.className = 'card-summary';
+    summary.textContent = session.summary || '(sem prompt ainda)';
+    article.appendChild(summary);
+
+    if (Array.isArray(session.todos) && session.todos.length > 0) {
+      var overall = window.OverwatchFormat.computeOverallProgress(session.todos);
+      var overallPct = overall.total > 0 ? Math.round((overall.done / overall.total) * 100) : 0;
+
+      var bar = document.createElement('div');
+      bar.className = 'overall-bar';
+      bar.innerHTML = '<i style="width:' + overallPct + '%"></i>';
+      article.appendChild(bar);
+
+      var ul = document.createElement('ul');
+      ul.className = 'todos';
+      session.todos.forEach(function (todo) {
+        ul.appendChild(renderTodoItem(todo));
+      });
+      article.appendChild(ul);
+    }
+
+    return article;
+  }
+
+  function render(sessions) {
+    var ids = Object.keys(sessions || {});
+    activeGrid.innerHTML = '';
+    archivedGrid.innerHTML = '';
+
+    if (ids.length === 0) {
+      emptyState.hidden = false;
+      emptyState.textContent = 'Nenhuma sessao registrada ainda.';
+      archivedSection.hidden = true;
+      return;
+    }
+
+    var now = Date.now();
+    var activeCount = 0;
+    var archivedCount = 0;
+
+    ids.forEach(function (id) {
+      var session = sessions[id];
+      var expired = session.status === 'ended' || window.OverwatchFormat.isExpired(session.last_update, now);
+      var card = renderCard(session);
+      if (expired) {
+        archivedGrid.appendChild(card);
+        archivedCount++;
+      } else {
+        activeGrid.appendChild(card);
+        activeCount++;
+      }
+    });
+
+    archivedSection.hidden = archivedCount === 0;
+    if (activeCount === 0 && archivedCount > 0) {
+      emptyState.hidden = false;
+      emptyState.textContent = 'Nenhuma sessao ativa no momento.';
+    } else {
+      emptyState.hidden = true;
+    }
+  }
+
+  function reloadSessionsScript() {
+    var old = document.getElementById('sessions-data-script');
+    if (old) old.remove();
+    var script = document.createElement('script');
+    script.id = 'sessions-data-script';
+    script.src = window.OVERWATCH_DATA_URL + '?t=' + Date.now();
+    script.onload = function () {
+      render(window.CLAUDE_SESSIONS || {});
+    };
+    script.onerror = function () {
+      render({});
+    };
+    document.body.appendChild(script);
+  }
+
+  if (!window.OVERWATCH_DATA_URL) {
+    configMissing.hidden = false;
+  } else {
+    reloadSessionsScript();
+    setInterval(reloadSessionsScript, POLL_MS);
+  }
+})();
+</script>
 </body>
 </html>

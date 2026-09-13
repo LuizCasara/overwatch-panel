@@ -574,7 +574,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T22: Lógica de dados de `panel/overwatch.html`
+### T22: Lógica de dados de `panel/overwatch.html` ✅ Done
 
 **What**: Adiciona a `panel/overwatch.html` o `<script>` inline que: carrega `panel-config.js` (com fallback de mensagem "rode `node install.mjs`" se `window.OVERWATCH_DATA_URL` estiver indefinido), implementa `reloadSessionsScript()` (injeta `<script src="{OVERWATCH_DATA_URL}?t={Date.now()}">` a cada 30s, sem reload de página), `render(sessions)` (separa ativas vs. arquivadas usando `isExpired` de `panel/format.js`), `renderCard`, `renderTodoItem` (usa `extractSubProgress`/`computeOverallProgress`), e trata `sessions.js` ausente/corrompido como lista vazia.
 **Where**: `panel/overwatch.html`
