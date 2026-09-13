@@ -38,6 +38,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: scripts/overwatch.js:278 (architecture)
 - last seen: 2026-09-13T10:44:58Z
 
+### L-005 - When a CLI test isolates HOME/USERPROFILE but runs the real binary against the actual repoRoot, any file the CLI writes relative to itself (e.g. generated config next to the script) leaks into the real project on every test run - isolate repoRoot too, not just HOME.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `install` · harmful: 0
+- features: session-overwatch-panel
+- evidence: scripts/install.test.mjs:146 (pre-fix) (install)
+- last seen: 2026-09-13T20:07:34Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

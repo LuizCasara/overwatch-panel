@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 5,
+  "next_id": 6,
   "lessons": [
     {
       "id": "L-001",
@@ -76,6 +76,24 @@
       ],
       "created": "2026-09-13T10:44:58Z",
       "last_seen": "2026-09-13T10:44:58Z"
+    },
+    {
+      "id": "L-005",
+      "key": "ac_gap::when a cli test isolates home userprofile but runs the real binary against the actual reporoot any file the cli writes relative to itself e g generated config next to the script leaks into the real project on every test run isolate reporoot too not just home",
+      "text": "When a CLI test isolates HOME/USERPROFILE but runs the real binary against the actual repoRoot, any file the CLI writes relative to itself (e.g. generated config next to the script) leaks into the real project on every test run - isolate repoRoot too, not just HOME.",
+      "signal": "ac_gap",
+      "scope": "install",
+      "status": "candidate",
+      "features": [
+        "session-overwatch-panel"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "scripts/install.test.mjs:146 (pre-fix) (install)"
+      ],
+      "created": "2026-09-13T20:07:34Z",
+      "last_seen": "2026-09-13T20:07:34Z"
     }
   ]
 }
