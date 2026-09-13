@@ -140,29 +140,51 @@ test('writePanelConfig overwrites the config when run again with a different hom
   assert.match(second, /Bob/);
 });
 
-// --- install.mjs CLI (real subprocess, isolated HOME) -----------------------
+// --- install.mjs CLI (real subprocess, isolated HOME *and* repoRoot) -------
+//
+// Isolating only HOME is not enough: install.mjs also writes
+// panel/panel-config.js next to itself. Running it against REAL_REPO_ROOT
+// would overwrite the real repo's panel-config.js with a throwaway test
+// path on every `npm test` - exactly the bug that broke the panel for a
+// real user (test runs left a stale temp-dir path behind). Copy install.mjs
+// and its one dependency into a scratch repoRoot instead, so tests never
+// touch the actual project's generated files.
+function tmpInstallRepoRoot() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'overwatch-cli-repo-test-'));
+  fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'panel'), { recursive: true });
+  fs.copyFileSync(path.join(REAL_REPO_ROOT, 'install.mjs'), path.join(dir, 'install.mjs'));
+  fs.copyFileSync(
+    path.join(REAL_REPO_ROOT, 'scripts', 'install-lib.js'),
+    path.join(dir, 'scripts', 'install-lib.js'),
+  );
+  return dir;
+}
 
-function runInstallCli(homeDir) {
-  return execFileSync(process.execPath, [path.join(REAL_REPO_ROOT, 'install.mjs')], {
+function runInstallCli(repoRoot, homeDir) {
+  return execFileSync(process.execPath, [path.join(repoRoot, 'install.mjs')], {
     env: { ...process.env, USERPROFILE: homeDir, HOME: homeDir },
   }).toString('utf8');
 }
 
 test('install.mjs creates settings.json with the expected hooks when none existed', () => {
+  const repoRoot = tmpInstallRepoRoot();
   const home = tmpHome();
-  runInstallCli(home);
+  runInstallCli(repoRoot, home);
   const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
   assert.ok(Array.isArray(settings.hooks.SessionStart));
   assert.match(settings.hooks.SessionStart[0].hooks[0].command, /overwatch\.js/);
-  assert.equal(fs.existsSync(path.join(REAL_REPO_ROOT, 'panel', 'panel-config.js')), true);
+  assert.equal(fs.existsSync(path.join(repoRoot, 'panel', 'panel-config.js')), true);
+  assert.equal(fs.existsSync(path.join(REAL_REPO_ROOT, 'panel', 'panel-config.js')), false);
 });
 
 test('install.mjs run twice does not duplicate hook groups', () => {
+  const repoRoot = tmpInstallRepoRoot();
   const home = tmpHome();
-  runInstallCli(home);
+  runInstallCli(repoRoot, home);
   const settingsPath = path.join(home, '.claude', 'settings.json');
   const firstSettings = fs.readFileSync(settingsPath, 'utf8');
-  runInstallCli(home);
+  runInstallCli(repoRoot, home);
   const secondSettings = fs.readFileSync(settingsPath, 'utf8');
   assert.equal(secondSettings, firstSettings);
 });
