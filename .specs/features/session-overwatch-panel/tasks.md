@@ -97,7 +97,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T2: `readStdinJson` + `logError` em `scripts/overwatch.js`
+### T2: `readStdinJson` + `logError` em `scripts/overwatch.js` ✅ Done
 
 **What**: Cria `scripts/overwatch.js` com as duas funções de infraestrutura: `readStdinJson()` (lê fd 0 síncrono, `JSON.parse` com fallback `{}`, nunca lança) e `logError(event, message)` (append JSON-line em `~/.claude/overwatch-data/overwatch.log`, cria o diretório se faltar). Nenhum handler de evento ainda.
 **Where**: `scripts/overwatch.js`
