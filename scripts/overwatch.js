@@ -235,6 +235,24 @@ function handleTodo(sessions, payload) {
   entry.last_update = new Date().toISOString();
 }
 
+const EVENT_HANDLERS = {
+  'session-start': handleSessionStart,
+  prompt: handlePrompt,
+  todo: handleTodo,
+  waiting: handleWaiting,
+  idle: handleIdle,
+  'session-end': handleSessionEnd,
+  statusline: handleStatusline,
+};
+
+function main(dataDir = DEFAULT_DATA_DIR) {
+  const event = process.argv[2];
+  const handler = EVENT_HANDLERS[event];
+  const payload = readStdinJson(event, dataDir);
+  if (!handler) return;
+  withSessionsLock(dataDir, sessions => handler(sessions, payload));
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -253,4 +271,18 @@ module.exports = {
   handleSessionEnd,
   handleStatusline,
   handleTodo,
+  main,
 };
+
+if (require.main === module) {
+  try {
+    main();
+  } catch (err) {
+    try {
+      logError('main', (err && err.message) || String(err));
+    } catch {
+      // Never let logging failure surface either.
+    }
+  }
+  process.exit(0);
+}

@@ -360,7 +360,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T13: Dispatch principal (`main`) de `scripts/overwatch.js`
+### T13: Dispatch principal (`main`) de `scripts/overwatch.js` ✅ Done
 
 **What**: Adiciona o bloco executável de `scripts/overwatch.js`: lê `process.argv[2]` (sub-evento), chama `readStdinJson()`, dentro de `withSessionsLock(dataDir, sessions => { ...chama o handler certo... })`, mapeando `session-start→handleSessionStart`, `prompt→handlePrompt`, `todo→handleTodo`, `waiting→handleWaiting`, `idle→handleIdle`, `session-end→handleSessionEnd`, `statusline→handleStatusline`. Sub-evento desconhecido: no-op silencioso. Todo o bloco top-level envolvido em try/catch que chama `logError` e sempre `process.exit(0)` (nunca propaga exceção, nunca sai com código != 0).
 **Where**: `scripts/overwatch.js`

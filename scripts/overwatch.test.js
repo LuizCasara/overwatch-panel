@@ -344,3 +344,37 @@ test('handleTodo writes an empty array when tool_input.todos is malformed', () =
   );
   assert.deepEqual(sessions.abc.todos, []);
 });
+
+// --- main (CLI dispatch, exercised as a real subprocess) --------------------
+
+function runOverwatchCli(subEvent, input, homeDir) {
+  return execFileSync(process.execPath, [path.join(__dirname, 'overwatch.js'), subEvent], {
+    input,
+    env: { ...process.env, USERPROFILE: homeDir, HOME: homeDir },
+  });
+}
+
+function dataDirFor(homeDir) {
+  return path.join(homeDir, '.claude', 'overwatch-data');
+}
+
+test('main writes a session entry for a real session-start payload and exits 0', () => {
+  const home = tmpDir();
+  const payload = JSON.stringify({ session_id: 'cli-1', cwd: REPO_ROOT });
+  assert.doesNotThrow(() => runOverwatchCli('session-start', payload, home));
+  const sessions = loadSessions(dataDirFor(home));
+  assert.ok(sessions['cli-1']);
+  assert.equal(sessions['cli-1'].status, 'running');
+});
+
+test('main is a no-op for an unknown sub-event and still exits 0', () => {
+  const home = tmpDir();
+  const payload = JSON.stringify({ session_id: 'cli-2', cwd: REPO_ROOT });
+  assert.doesNotThrow(() => runOverwatchCli('not-a-real-event', payload, home));
+  assert.deepEqual(loadSessions(dataDirFor(home)), {});
+});
+
+test('main exits 0 for invalid JSON on stdin (never propagates a failure to the hook)', () => {
+  const home = tmpDir();
+  assert.doesNotThrow(() => runOverwatchCli('session-start', '{not json', home));
+});
