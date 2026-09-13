@@ -528,7 +528,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T20: `panel/format.js`
+### T20: `panel/format.js` ✅ Done
 
 **What**: Cria `panel/format.js` com funções puras, expostas via padrão UMD simples (`module.exports` no Node, `window.OverwatchFormat` no browser): `formatElapsed(startedAtIso, nowMs)` (string tipo "12min", "1h 04min"), `extractSubProgress(content)` (retorna `{done, total} | null` a partir do regex `(\d+)\s*\/\s*(\d+)`), `computeOverallProgress(todos)` (retorna `{done, total}` contando `status === "completed"`), `isExpired(lastUpdateIso, nowMs, ttlMs = 20*60*1000)` (booleano).
 **Where**: `panel/format.js`
