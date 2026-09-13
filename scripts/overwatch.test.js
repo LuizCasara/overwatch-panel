@@ -21,6 +21,7 @@ const {
   handlePrompt,
   handleWaiting,
   handleIdle,
+  handleSessionEnd,
 } = require('./overwatch.js');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -267,4 +268,23 @@ test('handleIdle is a safe no-op for an unknown session_id', () => {
   const sessions = {};
   assert.doesNotThrow(() => handleIdle(sessions, { session_id: 'ghost' }));
   assert.deepEqual(sessions, {});
+});
+
+// --- handleSessionEnd ------------------------------------------------------
+
+test('handleSessionEnd sets ended_at and status ended', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  handleSessionEnd(sessions, { session_id: 'abc' });
+  assert.equal(sessions.abc.status, 'ended');
+  assert.equal(typeof sessions.abc.ended_at, 'string');
+});
+
+test('a later handlePrompt on an ended session reopens it idempotently', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  handleSessionEnd(sessions, { session_id: 'abc' });
+  handlePrompt(sessions, { session_id: 'abc', prompt: 'de volta' });
+  assert.equal(sessions.abc.status, 'running');
+  assert.equal(sessions.abc.ended_at, null);
 });

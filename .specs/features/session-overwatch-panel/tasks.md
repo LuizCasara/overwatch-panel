@@ -286,7 +286,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T10: `handleSessionEnd`
+### T10: `handleSessionEnd` ✅ Done
 
 **What**: Adiciona `handleSessionEnd(sessions, payload)`: grava `ended_at` (timestamp corrente) e `status: "ended"` na entrada de `payload.session_id`. Também cobre o edge case: se um evento posterior chegar para o mesmo `session_id` já `ended` (via qualquer outro handler), o comportamento normal de cada handler já sobrescreve o estado (nenhuma trava especial necessária) - este task inclui um teste que comprova isso end-to-end entre `handleSessionEnd` e `handlePrompt`.
 **Where**: `scripts/overwatch.js`

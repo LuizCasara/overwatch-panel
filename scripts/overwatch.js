@@ -187,6 +187,7 @@ function handlePrompt(sessions, payload) {
   const prompt = typeof payload.prompt === 'string' ? payload.prompt : '';
   sessions[sessionId].summary = prompt.slice(0, 80);
   sessions[sessionId].status = 'running';
+  sessions[sessionId].ended_at = null;
   sessions[sessionId].last_update = new Date().toISOString();
 }
 
@@ -204,6 +205,15 @@ function handleIdle(sessions, payload) {
   entry.last_update = new Date().toISOString();
 }
 
+function handleSessionEnd(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry) return;
+  const now = new Date().toISOString();
+  entry.ended_at = now;
+  entry.status = 'ended';
+  entry.last_update = now;
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -219,4 +229,5 @@ module.exports = {
   handlePrompt,
   handleWaiting,
   handleIdle,
+  handleSessionEnd,
 };
