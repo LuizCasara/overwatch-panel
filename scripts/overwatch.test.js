@@ -11,6 +11,9 @@ const {
   parseJsonSafe,
   logError,
   readStdinJson,
+  sessionsFilePath,
+  loadSessions,
+  writeSessionsFile,
 } = require('./overwatch.js');
 
 function tmpDir() {
@@ -77,4 +80,32 @@ test('readStdinJson returns {} and logs on invalid JSON (never throws)', () => {
 test('readStdinJson returns {} for empty stdin', () => {
   const result = runReadStdinJson('', tmpDir());
   assert.deepEqual(result, {});
+});
+
+// --- loadSessions / writeSessionsFile ---------------------------------------
+
+test('writeSessionsFile then loadSessions round-trips the same object', () => {
+  const dir = tmpDir();
+  const sessions = { abc: { session_id: 'abc', status: 'running' } };
+  writeSessionsFile(sessions, dir);
+  assert.deepEqual(loadSessions(dir), sessions);
+});
+
+test('loadSessions returns {} when sessions.js does not exist yet', () => {
+  const dir = tmpDir();
+  assert.deepEqual(loadSessions(dir), {});
+});
+
+test('loadSessions returns {} for a corrupted sessions.js', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(sessionsFilePath(dir), 'this is not the expected format at all');
+  assert.deepEqual(loadSessions(dir), {});
+});
+
+test('writeSessionsFile leaves no orphan .tmp file behind', () => {
+  const dir = tmpDir();
+  writeSessionsFile({ a: 1 }, dir);
+  const leftovers = fs.readdirSync(dir).filter(f => f.endsWith('.tmp'));
+  assert.deepEqual(leftovers, []);
+  assert.equal(fs.existsSync(sessionsFilePath(dir)), true);
 });

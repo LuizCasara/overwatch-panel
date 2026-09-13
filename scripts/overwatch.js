@@ -46,9 +46,40 @@ function readStdinJson(event, dataDir = DEFAULT_DATA_DIR) {
   return parsed;
 }
 
+const SESSIONS_FILE_RE = /^window\.CLAUDE_SESSIONS\s*=\s*([\s\S]*?);\s*$/;
+
+function sessionsFilePath(dataDir) {
+  return path.join(dataDir, 'sessions.js');
+}
+
+function loadSessions(dataDir = DEFAULT_DATA_DIR) {
+  let raw;
+  try {
+    raw = fs.readFileSync(sessionsFilePath(dataDir), 'utf8');
+  } catch {
+    return {};
+  }
+  const match = SESSIONS_FILE_RE.exec(raw.trim());
+  if (!match) return {};
+  const parsed = parseJsonSafe(match[1]);
+  return parsed === null ? {} : parsed;
+}
+
+function writeSessionsFile(sessions, dataDir = DEFAULT_DATA_DIR) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const filePath = sessionsFilePath(dataDir);
+  const tmpPath = `${filePath}.${process.pid}.tmp`;
+  const content = `window.CLAUDE_SESSIONS = ${JSON.stringify(sessions, null, 2)};\n`;
+  fs.writeFileSync(tmpPath, content);
+  fs.renameSync(tmpPath, filePath);
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
   logError,
   readStdinJson,
+  sessionsFilePath,
+  loadSessions,
+  writeSessionsFile,
 };

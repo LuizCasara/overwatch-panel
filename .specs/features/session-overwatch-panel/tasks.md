@@ -120,7 +120,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T3: `loadSessions` + `writeSessionsFile`
+### T3: `loadSessions` + `writeSessionsFile` ✅ Done
 
 **What**: Adiciona a `scripts/overwatch.js` as funções de (de)serialização do arquivo `sessions.js`: `loadSessions()` (lê `window.CLAUDE_SESSIONS = {...}`, extrai o objeto, retorna `{}` se ausente/corrompido) e `writeSessionsFile(sessions)` (serializa como `window.CLAUDE_SESSIONS = ${JSON.stringify(sessions, null, 2)};\n` via arquivo `.tmp` + `fs.renameSync` atômico).
 **Where**: `scripts/overwatch.js`
