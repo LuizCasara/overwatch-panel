@@ -410,7 +410,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T15: `scripts/statusline-wrapper.sh`
+### T15: `scripts/statusline-wrapper.sh` ✅ Done
 
 **What**: Cria o wrapper: lê stdin uma vez (`input=$(cat)`), repassa para `node "<repoRoot>/scripts/overwatch.js" statusline` via echo (ignorando falhas com `|| true`), depois repassa o mesmo `$input` para o comando salvo em `scripts/statusline-original-command.txt` (se o arquivo existir; senão cai de volta para `bash ~/.claude/statusline-command.sh` como default), imprimindo a saída dele sem alteração.
 **Where**: `scripts/statusline-wrapper.sh`
