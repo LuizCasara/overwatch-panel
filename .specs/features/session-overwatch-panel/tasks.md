@@ -76,7 +76,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ## Task Breakdown
 
-### T1: Criar `package.json` mínimo
+### T1: Criar `package.json` mínimo ✅ Done
 
 **What**: Cria `package.json` na raiz com `name`, `private: true`, `version`, e `scripts.test` apontando para o comando Full do gate.
 **Where**: `package.json`

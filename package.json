@@ -1,0 +1,9 @@
+{
+  "name": "claude-overwatch",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Painel local que mostra todas as sessoes ativas do Claude Code na maquina, atualizado via hooks.",
+  "scripts": {
+    "test": "node --test scripts/overwatch.test.js scripts/install.test.mjs panel/format.test.js"
+  }
+}
