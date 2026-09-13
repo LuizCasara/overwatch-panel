@@ -553,7 +553,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T21: Estrutura e estilo de `panel/overwatch.html`
+### T21: Estrutura e estilo de `panel/overwatch.html` ✅ Done
 
 **What**: Cria `panel/overwatch.html` com a estrutura HTML e CSS do HUD (fundo quase preto, cards em vidro fosco com glow, fonte `Space Mono` com fallback `monospace`, grid de cards, legenda de status como indicadores geométricos com glow, seção "arquivadas" esmaecida no rodapé). Sem lógica de dados ainda - conteúdo placeholder estático para validar visualmente o estilo isoladamente.
 **Where**: `panel/overwatch.html`

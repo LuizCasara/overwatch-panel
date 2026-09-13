@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pt-br" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-overwatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #05070a;
+    --panel-bg: rgba(18, 24, 32, 0.55);
+    --panel-border: rgba(120, 170, 220, 0.18);
+    --text-primary: #d8e6f2;
+    --text-dim: #7c8ba0;
+    --mono: 'Space Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+    --status-running: #35b6ff;
+    --status-done: #3ddc84;
+    --status-waiting: #f2c94c;
+    --status-idle: #9aa7b8;
+    --status-error: #ff5d5d;
+    --status-ended: #4a5566;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: radial-gradient(circle at 20% -10%, #10202e 0%, var(--bg) 55%);
+    color: var(--text-primary);
+    font-family: var(--mono);
+    padding: 24px 16px 48px;
+    min-height: 100vh;
+  }
+
+  .wrap { max-width: 1200px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: 18px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0;
+    color: var(--text-primary);
+  }
+
+  h1 .glow { color: var(--status-running); text-shadow: 0 0 12px rgba(53, 182, 255, 0.6); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+
+  .blip {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    flex: none;
+  }
+
+  .blip.pulsing { animation: pulse 1.6s ease-in-out infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.82); }
+  }
+
+  .blip.running { background: var(--status-running); box-shadow: 0 0 8px var(--status-running); }
+  .blip.done { background: var(--status-done); box-shadow: 0 0 8px var(--status-done); }
+  .blip.waiting { background: var(--status-waiting); box-shadow: 0 0 8px var(--status-waiting); }
+  .blip.idle { background: var(--status-idle); }
+  .blip.error { background: var(--status-error); box-shadow: 0 0 8px var(--status-error); }
+  .blip.ended { background: var(--status-ended); }
+
+  #empty-state, #config-missing {
+    border: 1px dashed var(--panel-border);
+    border-radius: 12px;
+    padding: 32px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  #config-missing code {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text-primary);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    flex-wrap: wrap;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  .card-header .project { color: var(--text-primary); font-weight: 700; }
+  .card-header .sep { opacity: 0.4; }
+
+  .card-summary {
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .overall-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .overall-bar > i {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--status-running), var(--status-done));
+  }
+
+  .todos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+  .todo {
+    font-size: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: var(--text-dim);
+  }
+
+  .todo .mark { flex: none; margin-top: 2px; }
+  .todo.completed { color: var(--text-primary); text-decoration: line-through; opacity: 0.6; }
+  .todo.in_progress { color: var(--text-primary); }
+
+  .sub-progress {
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    margin-top: 4px;
+    overflow: hidden;
+  }
+
+  .sub-progress > i { display: block; height: 100%; background: var(--status-waiting); }
+
+  section.archived {
+    margin-top: 40px;
+    opacity: 0.5;
+  }
+
+  section.archived h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  @media (max-width: 480px) {
+    body { padding: 16px 12px 32px; }
+    .card-header { font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="glow">●</span> claude-overwatch</h1>
+    <div class="legend">
+      <span class="legend-item"><span class="blip running pulsing"></span> rodando</span>
+      <span class="legend-item"><span class="blip done"></span> concluido</span>
+      <span class="legend-item"><span class="blip waiting pulsing"></span> aguardando voce</span>
+      <span class="legend-item"><span class="blip idle"></span> ocioso</span>
+      <span class="legend-item"><span class="blip error"></span> erro</span>
+      <span class="legend-item"><span class="blip ended"></span> encerrada</span>
+    </div>
+  </header>
+
+  <div id="config-missing" hidden>
+    Configuracao nao encontrada. Rode <code>node install.mjs</code> na raiz do repositorio e recarregue esta pagina.
+  </div>
+
+  <div id="empty-state" hidden>Nenhuma sessao registrada ainda.</div>
+
+  <main id="active-grid" class="grid">
+    <article class="card">
+      <div class="card-header">
+        <span class="blip running pulsing"></span>
+        <span class="project">claude-overwatch</span>
+        <span class="sep">|</span><span>master</span>
+        <span class="sep">|</span><span>12min</span>
+        <span class="sep">|</span><span>34%</span>
+      </div>
+      <div class="card-summary">card de exemplo - substituido pelos dados reais em T22</div>
+      <div class="overall-bar"><i style="width: 40%"></i></div>
+      <ul class="todos">
+        <li class="todo completed"><span class="mark">✔</span> Ler o brief</li>
+        <li class="todo in_progress">
+          <span class="mark">▸</span>
+          <span>
+            Revisar as 12 secoes do relatorio (3/12)
+            <div class="sub-progress"><i style="width: 25%"></i></div>
+          </span>
+        </li>
+        <li class="todo"><span class="mark">○</span> Escrever resumo final</li>
+      </ul>
+    </article>
+  </main>
+
+  <section class="archived">
+    <h2>Arquivadas</h2>
+    <div id="archived-grid" class="grid"></div>
+  </section>
+</div>
+</body>
+</html>
