@@ -1,4 +1,4 @@
-![claude-overwatch](https://capsule-render.vercel.app/api?type=rect&color=0:05070a,100:10202e&height=180&section=header&text=claude-overwatch&fontSize=40&fontColor=35b6ff&fontAlignY=40&desc=painel%20local%20de%20sess%C3%B5es%20do%20Claude%20Code&descSize=16&descColor=7c8ba0&descAlignY=68)
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:05070a,100:10202e&height=180&section=header&text=claude-overwatch&fontSize=40&fontColor=35b6ff&fontAlignY=40&desc=painel%20local%20de%20sess%C3%B5es%20do%20Claude%20Code&descSize=16&descColor=7c8ba0&descAlignY=68&width=1600" width="100%" alt="claude-overwatch" />
 
 [![last commit](https://img.shields.io/github/last-commit/LuizCasara/overwatch-panel?style=flat-square&label=last%20commit&color=3ddc84)](https://github.com/LuizCasara/overwatch-panel/commits/main)
 [![repo size](https://img.shields.io/github/repo-size/LuizCasara/overwatch-panel?style=flat-square&label=size&color=7c8ba0)](https://github.com/LuizCasara/overwatch-panel)
