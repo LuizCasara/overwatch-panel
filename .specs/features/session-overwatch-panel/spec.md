@@ -149,8 +149,8 @@ Todas as ambiguidades identificadas na revisão do `docs/design-spec.md` (seçã
 | OVW-15 | P3: Instalação portátil | Design | Pending |
 | OVW-16 | P3: Instalação portátil | Design | Pending |
 | OVW-17 | P3: Instalação portátil | Design | Pending |
-| OVW-18 | P3: Instalação portátil | Design | Pending |
-| OVW-19 | P3: Instalação portátil | Design | Pending |
+| OVW-18 | P3: Instalação portátil | Implementing | In Tasks (T14, done) |
+| OVW-19 | P3: Instalação portátil | Implementing | In Tasks (T14, done) |
 
 **ID format:** `OVW-NN`, numerado na ordem de aparição dos critérios de aceite acima (OVW-01..10 = P1 ACs 1..10, OVW-11..14 = P2 ACs 1..4, OVW-15..19 = P3 ACs 1..5).
 

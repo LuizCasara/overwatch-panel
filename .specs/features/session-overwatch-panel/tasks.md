@@ -384,7 +384,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T14: `isAnyOtherSessionActive` + `openPanelIfFirstSession`
+### T14: `isAnyOtherSessionActive` + `openPanelIfFirstSession` ✅ Done (com SPEC_DEVIATION - ver commit)
 
 **What**: Adiciona `isAnyOtherSessionActive(sessions, selfId)` (verdadeiro se existir outra entrada com `status !== "ended"` e `last_update` há menos de 20 minutos) e `openPanelIfFirstSession(sessions, selfId, panelPath)` (se `isAnyOtherSessionActive` for falso, dispara `child_process.exec('start "" "<panelPath>"')` best-effort, sem esperar nem lançar em caso de falha). `handleSessionStart` (T6) passa a chamar `openPanelIfFirstSession` depois de gravar a nova entrada.
 **Where**: `scripts/overwatch.js`

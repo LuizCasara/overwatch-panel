@@ -24,6 +24,8 @@ const {
   handleSessionEnd,
   handleStatusline,
   handleTodo,
+  isAnyOtherSessionActive,
+  openPanelIfFirstSession,
 } = require('./overwatch.js');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -377,4 +379,55 @@ test('main is a no-op for an unknown sub-event and still exits 0', () => {
 test('main exits 0 for invalid JSON on stdin (never propagates a failure to the hook)', () => {
   const home = tmpDir();
   assert.doesNotThrow(() => runOverwatchCli('session-start', '{not json', home));
+});
+
+// --- isAnyOtherSessionActive / openPanelIfFirstSession ----------------------
+
+test('isAnyOtherSessionActive is false when only the caller session exists', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'self', cwd: REPO_ROOT });
+  assert.equal(isAnyOtherSessionActive(sessions, 'self'), false);
+});
+
+test('isAnyOtherSessionActive is false when others are ended or expired (>20min)', () => {
+  const now = new Date().toISOString();
+  const old = new Date(Date.now() - 21 * 60 * 1000).toISOString();
+  const sessions = {
+    self: { status: 'running', last_update: now },
+    ended: { status: 'ended', last_update: now },
+    expired: { status: 'running', last_update: old },
+  };
+  assert.equal(isAnyOtherSessionActive(sessions, 'self'), false);
+});
+
+test('isAnyOtherSessionActive is true when another session is recently active', () => {
+  const now = new Date().toISOString();
+  const sessions = {
+    self: { status: 'running', last_update: now },
+    other: { status: 'waiting', last_update: now },
+  };
+  assert.equal(isAnyOtherSessionActive(sessions, 'self'), true);
+});
+
+test('openPanelIfFirstSession does not spawn when another session is active', () => {
+  const now = new Date().toISOString();
+  const sessions = {
+    self: { status: 'running', last_update: now },
+    other: { status: 'idle', last_update: now },
+  };
+  let called = false;
+  openPanelIfFirstSession(sessions, 'self', 'C:\\panel\\overwatch.html', () => {
+    called = true;
+  });
+  assert.equal(called, false);
+});
+
+test('openPanelIfFirstSession spawns "start" with the panel path when no other session is active', () => {
+  const sessions = { self: { status: 'running', last_update: new Date().toISOString() } };
+  let received = null;
+  openPanelIfFirstSession(sessions, 'self', 'C:\\panel\\overwatch.html', cmd => {
+    received = cmd;
+  });
+  assert.match(received, /start/);
+  assert.match(received, /overwatch\.html/);
 });

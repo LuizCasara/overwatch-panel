@@ -8,7 +8,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, exec } = require('child_process');
 
 const DEFAULT_DATA_DIR = path.join(os.homedir(), '.claude', 'overwatch-data');
 
@@ -235,6 +235,30 @@ function handleTodo(sessions, payload) {
   entry.last_update = new Date().toISOString();
 }
 
+const ACTIVE_TTL_MS = 20 * 60 * 1000;
+const DEFAULT_PANEL_PATH = path.join(__dirname, '..', 'panel', 'overwatch.html');
+
+function isAnyOtherSessionActive(sessions, selfId) {
+  const now = Date.now();
+  return Object.keys(sessions).some(id => {
+    if (id === selfId) return false;
+    const entry = sessions[id];
+    if (!entry || entry.status === 'ended') return false;
+    const lastUpdateMs = Date.parse(entry.last_update);
+    if (Number.isNaN(lastUpdateMs)) return false;
+    return now - lastUpdateMs < ACTIVE_TTL_MS;
+  });
+}
+
+function openPanelIfFirstSession(sessions, selfId, panelPath = DEFAULT_PANEL_PATH, execFn = exec) {
+  if (isAnyOtherSessionActive(sessions, selfId)) return;
+  try {
+    execFn(`start "" "${panelPath}"`);
+  } catch {
+    // Opening the browser is best-effort - never critical to the hook.
+  }
+}
+
 const EVENT_HANDLERS = {
   'session-start': handleSessionStart,
   prompt: handlePrompt,
@@ -245,12 +269,18 @@ const EVENT_HANDLERS = {
   statusline: handleStatusline,
 };
 
-function main(dataDir = DEFAULT_DATA_DIR) {
+function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
   const event = process.argv[2];
   const handler = EVENT_HANDLERS[event];
   const payload = readStdinJson(event, dataDir);
   if (!handler) return;
   withSessionsLock(dataDir, sessions => handler(sessions, payload));
+  // SPEC_DEVIATION: design.md originally called openPanelIfFirstSession from
+  // inside handleSessionStart. Moved here so the pure handler stays free of
+  // process-spawning side effects and is safely reusable in unit tests.
+  if (event === 'session-start' && payload.session_id) {
+    openPanelIfFirstSession(loadSessions(dataDir), payload.session_id, panelPath);
+  }
 }
 
 module.exports = {
@@ -271,6 +301,8 @@ module.exports = {
   handleSessionEnd,
   handleStatusline,
   handleTodo,
+  isAnyOtherSessionActive,
+  openPanelIfFirstSession,
   main,
 };
 
