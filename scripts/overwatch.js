@@ -197,6 +197,13 @@ function handleWaiting(sessions, payload) {
   entry.last_update = new Date().toISOString();
 }
 
+function handleIdle(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry) return;
+  entry.status = 'idle';
+  entry.last_update = new Date().toISOString();
+}
+
 module.exports = {
   DEFAULT_DATA_DIR,
   parseJsonSafe,
@@ -211,4 +218,5 @@ module.exports = {
   handleSessionStart,
   handlePrompt,
   handleWaiting,
+  handleIdle,
 };

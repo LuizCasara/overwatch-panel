@@ -263,7 +263,7 @@ Tasks: T23 (depende de T17, T18), T24 (depende de T19, T22).
 
 ---
 
-### T9: `handleIdle`
+### T9: `handleIdle` ✅ Done
 
 **What**: Adiciona `handleIdle(sessions, payload)`: atualiza `status: "idle"` e `last_update` na entrada de `payload.session_id`.
 **Where**: `scripts/overwatch.js`

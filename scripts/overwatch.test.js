@@ -20,6 +20,7 @@ const {
   handleSessionStart,
   handlePrompt,
   handleWaiting,
+  handleIdle,
 } = require('./overwatch.js');
 
 const REPO_ROOT = path.join(__dirname, '..');
@@ -250,5 +251,20 @@ test('handleWaiting sets status to waiting for an existing session', () => {
 test('handleWaiting is a safe no-op for an unknown session_id', () => {
   const sessions = {};
   assert.doesNotThrow(() => handleWaiting(sessions, { session_id: 'ghost' }));
+  assert.deepEqual(sessions, {});
+});
+
+// --- handleIdle ----------------------------------------------------------------
+
+test('handleIdle sets status to idle for an existing session', () => {
+  const sessions = {};
+  handleSessionStart(sessions, { session_id: 'abc', cwd: REPO_ROOT });
+  handleIdle(sessions, { session_id: 'abc' });
+  assert.equal(sessions.abc.status, 'idle');
+});
+
+test('handleIdle is a safe no-op for an unknown session_id', () => {
+  const sessions = {};
+  assert.doesNotThrow(() => handleIdle(sessions, { session_id: 'ghost' }));
   assert.deepEqual(sessions, {});
 });
