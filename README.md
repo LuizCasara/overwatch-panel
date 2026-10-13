@@ -54,10 +54,13 @@ Além das sessões, o painel entende o fluxo do spine (`CLAUDE.md` do spine):
 | `PostToolUse` `Skill` | `skill` | skills usadas, `kind` (feature / bugfix) e o fluxo grill → spec → tickets → implement → review → commit → retro |
 | `PreToolUse` `Agent\|Task` + `SubagentStart` / `SubagentStop` | `agent-launch`, `subagent-start`, `subagent-stop` | subagentes rodando/concluídos, com descrição e resumo |
 | `Stop` / `UserPromptSubmit` | `idle`, `prompt` | `context_pct` calculado do transcript (o statusline não roda na extensão do VS Code) |
+| (qualquer um dos de cima, no máx. a cada 5 min por RM) | `scripts/rm-refresh.js`, destacado | chip do RM: status no board (via `scripts/roadmap.py` do spine) e merge por repo (`git log --grep RM-N` + ancestral de `origin/<prod>` / `<integration>`) |
 
 O fluxo é da **feature**, não da sessão: skills de todas as sessões com o
 mesmo `slug` contam, porque o spine manda dar `/clear` entre etapas. Os
 artefatos (spec, `issues/`, tickets `done`) também valem como evidência.
+O código do RM vem de `(RM-N)` no título da spec (convenção das skills `to-spec`, `commit` e `pr`). Estados por repo: **✔** em produção, **◐** só na integração (front: develop, falta o release), **◌** só em branch, **—** nenhum commit cita o RM (RM antigo, sem a marca). `100% mergeado` exige todos os repos da tag do board em produção. Nada de segredo é lido ou gravado aqui: a credencial fica com o `roadmap.py`.
+
 A janela de contexto assume 200k; use `OVERWATCH_CONTEXT_WINDOW` para outro valor.
 
 ## Testes

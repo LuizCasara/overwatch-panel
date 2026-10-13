@@ -8,7 +8,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync, exec } = require('child_process');
+const { execFileSync, exec, spawn } = require('child_process');
 
 const DEFAULT_DATA_DIR = path.join(os.homedir(), '.claude', 'overwatch-data');
 
@@ -366,6 +366,24 @@ function isFeatureFile(filePath) {
   return typeof filePath === 'string' && FEATURE_DIR_RE.test(filePath);
 }
 
+// O codigo do board ("(RM-142)") fica no titulo da spec; o progresso.md e o
+// segundo lugar. So o comeco do arquivo: o codigo vem no titulo.
+const RM_CODE_RE = /\bRM-(\d+)\b/;
+const RM_HEAD_BYTES = 4096;
+
+function readRmCode(featureDir, specNames, fsApi = fs) {
+  for (const name of [...specNames, 'progresso.md']) {
+    try {
+      const head = fsApi.readFileSync(path.join(featureDir, name), 'utf8').slice(0, RM_HEAD_BYTES);
+      const match = head.match(RM_CODE_RE);
+      if (match) return Number(match[1]);
+    } catch {
+      // arquivo ausente
+    }
+  }
+  return null;
+}
+
 // Edit/Write numa feature relê a pasta inteira: o painel mostra a lista
 // completa de tickets, nao so o que foi editado.
 function handleSpecTasks(sessions, payload, fsApi = fs) {
@@ -376,12 +394,13 @@ function handleSpecTasks(sessions, payload, fsApi = fs) {
   const [, featureDir, slug] = filePath.match(FEATURE_DIR_RE);
 
   const tickets = readFeatureTickets(path.join(featureDir, 'issues'), fsApi);
-  let hasSpec = false;
+  let specNames = [];
   try {
-    hasSpec = fsApi.readdirSync(featureDir).some(n => SPEC_FILE_RE.test(n));
+    specNames = fsApi.readdirSync(featureDir).filter(n => SPEC_FILE_RE.test(n));
   } catch {
     // pasta ilegivel
   }
+  const hasSpec = specNames.length > 0;
   if (tickets.length === 0 && !hasSpec) return;
 
   if (tickets.length > 0) entry.todos = tickets;
@@ -391,6 +410,10 @@ function handleSpecTasks(sessions, payload, fsApi = fs) {
     tickets_total: tickets.length,
     tickets_done: tickets.filter(t => t.status === 'completed').length,
   };
+  const rm = readRmCode(featureDir, specNames, fsApi);
+  if (rm !== null) entry.feature.rm = rm;
+  // <spine>/work/features/<slug> -> <spine>: o refresh do RM precisa achar repos.yaml e scripts/roadmap.py
+  entry.spine_root = path.resolve(featureDir, '..', '..', '..');
   refreshDerived(sessions, entry);
   entry.last_update = new Date().toISOString();
 }
@@ -573,6 +596,32 @@ const EVENT_HANDLERS = {
   'subagent-stop': handleSubagentStop,
 };
 
+// Status do board + merges por RM fazem rede (git fetch, API): rodam num
+// processo destacado, no maximo a cada RM_TTL_MS por RM, nunca dentro do hook.
+const RM_TTL_MS = 5 * 60 * 1000;
+const RM_REFRESH_EVENTS = new Set(['idle', 'prompt', 'spec-tasks']);
+
+function needsRmRefresh(entry, nowMs = Date.now()) {
+  const code = entry.feature && entry.feature.rm;
+  if (!code || entry.status === 'ended' || !entry.spine_root) return false;
+  if (!entry.rm || entry.rm.code !== code) return true;
+  const checkedAt = Date.parse(entry.rm.checked_at);
+  return Number.isNaN(checkedAt) || nowMs - checkedAt > RM_TTL_MS;
+}
+
+function spawnRmRefresh(code, spineRoot, dataDir, spawnFn = spawn) {
+  try {
+    const child = spawnFn(
+      process.execPath,
+      [path.join(__dirname, 'rm-refresh.js'), String(code), spineRoot, dataDir],
+      { detached: true, stdio: 'ignore', windowsHide: true },
+    );
+    child.unref();
+  } catch {
+    // sem refresh: o painel segue com o ultimo valor
+  }
+}
+
 function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
   const event = process.argv[2];
   const handler = EVENT_HANDLERS[event];
@@ -582,7 +631,18 @@ function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
   // filter by file_path before touching the sessions.js lock so editing
   // unrelated files never pays that cost.
   if (event === 'spec-tasks' && !isFeatureFile(payload.tool_input && payload.tool_input.file_path)) return;
-  withSessionsLock(dataDir, sessions => handler(sessions, payload));
+  let refresh = null;
+  withSessionsLock(dataDir, sessions => {
+    handler(sessions, payload);
+    const entry = sessions[payload.session_id];
+    if (entry && RM_REFRESH_EVENTS.has(event) && needsRmRefresh(entry)) {
+      // Reserva a vez ainda sob o lock: hooks em sequencia nao disparam N refreshes.
+      const previous = entry.rm && entry.rm.code === entry.feature.rm ? entry.rm : { code: entry.feature.rm };
+      entry.rm = { ...previous, checked_at: new Date().toISOString() };
+      refresh = { code: entry.feature.rm, spineRoot: entry.spine_root };
+    }
+  });
+  if (refresh) spawnRmRefresh(refresh.code, refresh.spineRoot, dataDir);
   // SPEC_DEVIATION: design.md originally called openPanelIfFirstSession from
   // inside handleSessionStart. Moved here so the pure handler stays free of
   // process-spawning side effects and is safely reusable in unit tests.
@@ -613,6 +673,9 @@ module.exports = {
   readContextFromTranscript,
   parseTicket,
   handleSpecTasks,
+  readRmCode,
+  needsRmRefresh,
+  spawnRmRefresh,
   isFeatureFile,
   readFeatureTickets,
   computeKind,

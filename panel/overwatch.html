@@ -232,6 +232,35 @@
   .meta-line { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
   .meta-line b { color: var(--text-primary); font-weight: 400; }
 
+  .rm-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+    font-size: 11px;
+  }
+  .chip {
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .chip.rm { color: var(--text-primary); font-weight: 700; }
+  .chip.st-working { color: var(--status-running); border-color: rgba(53, 182, 255, 0.45); }
+  .chip.st-validando { color: var(--status-waiting); border-color: rgba(242, 201, 76, 0.45); }
+  .chip.st-done { color: var(--status-done); border-color: rgba(61, 220, 132, 0.45); }
+  .chip.ok { color: var(--status-done); border-color: rgba(61, 220, 132, 0.45); }
+  .chip.partial { color: var(--status-waiting); border-color: rgba(242, 201, 76, 0.45); }
+  .chip.none { opacity: 0.6; }
+  .chip.complete {
+    color: #05070a;
+    background: var(--status-done);
+    border-color: var(--status-done);
+    font-weight: 700;
+  }
+
   section.archived {
     margin-top: 40px;
     opacity: 0.5;
@@ -374,6 +403,55 @@
     return ul;
   }
 
+  var RM_STATUS_CLASS = {
+    WORKING: 'st-working',
+    VALIDANDO: 'st-validando',
+    DONE: 'st-done',
+  };
+
+  function repoChip(label, repo) {
+    var state = repo && repo.state;
+    var pr = repo && repo.pr ? ' #' + repo.pr : '';
+    if (state === 'prod') {
+      return { cls: 'ok', text: '✔ ' + label + ' ' + (repo.prod_branch || '') + pr, title: 'mergeado na branch de producao' };
+    }
+    if (state === 'integration') {
+      return {
+        cls: 'partial',
+        text: '◐ ' + label + ' ' + (repo.integration_branch || '') + ' · falta ' + (repo.prod_branch || 'release'),
+        title: 'na branch de integracao, ainda sem release para producao',
+      };
+    }
+    if (state === 'wip') {
+      return { cls: 'partial', text: '◌ ' + label + ' so em branch', title: 'ha commits com o codigo, fora das branches principais' };
+    }
+    if (state === 'none') {
+      return { cls: 'none', text: '— ' + label, title: 'nenhum commit cita este RM (a marca (RM-N) e recente)' };
+    }
+    return { cls: 'none', text: '? ' + label, title: 'nao foi possivel ler o repositorio' };
+  }
+
+  function renderRm(session) {
+    var rmCode = session.feature && session.feature.rm;
+    if (!rmCode) return null;
+    var rm = session.rm || {};
+    var row = document.createElement('div');
+    row.className = 'rm-row';
+    var html = '<span class="chip rm">RM-' + escapeHtml(rmCode) + '</span>';
+    if (rm.status) {
+      html += '<span class="chip ' + (RM_STATUS_CLASS[rm.status] || '') + '">' + escapeHtml(rm.status) + '</span>';
+    } else if (rm.board_error) {
+      html += '<span class="chip none" title="' + escapeHtml(rm.board_error) + '">board indisponivel</span>';
+    }
+    Object.keys(rm.repos || {}).forEach(function (label) {
+      var c = repoChip(label, rm.repos[label]);
+      html += '<span class="chip ' + c.cls + '" title="' + escapeHtml(c.title) + '">' + escapeHtml(c.text) + '</span>';
+    });
+    if (rm.complete) html += '<span class="chip complete">100% mergeado</span>';
+    row.innerHTML = html;
+    return row;
+  }
+
   function renderCard(session) {
     var article = document.createElement('article');
     article.className = 'card';
@@ -407,6 +485,9 @@
     summary.className = 'card-summary';
     summary.textContent = session.summary || '(sem prompt ainda)';
     article.appendChild(summary);
+
+    var rmRow = renderRm(session);
+    if (rmRow) article.appendChild(rmRow);
 
     if (Array.isArray(session.flow) && session.flow.length > 0) {
       article.appendChild(renderFlow(session.flow));

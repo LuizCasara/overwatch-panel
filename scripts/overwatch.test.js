@@ -26,6 +26,9 @@ const {
   handleTodo,
   isTicketFile,
   isFeatureFile,
+  readRmCode,
+  needsRmRefresh,
+  spawnRmRefresh,
   computeKind,
   computeFlow,
   handleSkill,
@@ -674,9 +677,56 @@ test('handleSpecTasks on the spec file records slug and has_spec without touchin
   fs.writeFileSync(path.join(featureDir, '13-10-2026-demo.md'), '# Demo (RM-1)');
   const sessions = { s1: { todos: [{ content: 'keep', status: 'pending' }], skills: [] } };
   handleSpecTasks(sessions, { session_id: 's1', tool_input: { file_path: path.join(featureDir, '13-10-2026-demo.md') } });
-  assert.deepEqual(sessions.s1.feature, { slug: 'demo', has_spec: true, tickets_total: 0, tickets_done: 0 });
+  assert.deepEqual(sessions.s1.feature, { slug: 'demo', has_spec: true, tickets_total: 0, tickets_done: 0, rm: 1 });
+  assert.equal(sessions.s1.spine_root, path.resolve(featureDir, '..', '..', '..'));
   assert.deepEqual(sessions.s1.todos, [{ content: 'keep', status: 'pending' }]);
   assert.equal(sessions.s1.kind, 'feature');
+});
+
+// --- RM code and refresh throttle ---------------------------------------------
+
+test('readRmCode reads the code from the spec title and falls back to progresso.md', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, '12-10-2026-merge.md'), '# Mesclagem de clientes (RM-142)\n');
+  assert.equal(readRmCode(dir, ['12-10-2026-merge.md']), 142);
+
+  const dir2 = tmpDir();
+  fs.writeFileSync(path.join(dir2, '01-01-2026-x.md'), '# Sem codigo\n');
+  fs.writeFileSync(path.join(dir2, 'progresso.md'), 'Item do board: RM-77\n');
+  assert.equal(readRmCode(dir2, ['01-01-2026-x.md']), 77);
+  assert.equal(readRmCode(tmpDir(), []), null);
+});
+
+test('readRmCode ignores an RM code that only appears deep in the file', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, '01-01-2026-x.md'), '# Titulo\n' + 'x'.repeat(5000) + '\nRM-9\n');
+  assert.equal(readRmCode(dir, ['01-01-2026-x.md']), null);
+});
+
+test('needsRmRefresh: needs a code and spine root, skips ended sessions, honours the 5 min TTL', () => {
+  const now = Date.parse('2026-10-13T12:00:00Z');
+  const base = { status: 'running', spine_root: 'C:\\s', feature: { slug: 'x', rm: 142 } };
+  assert.equal(needsRmRefresh({ ...base }, now), true);
+  assert.equal(needsRmRefresh({ ...base, feature: { slug: 'x' } }, now), false);
+  assert.equal(needsRmRefresh({ ...base, spine_root: undefined }, now), false);
+  assert.equal(needsRmRefresh({ ...base, status: 'ended' }, now), false);
+  assert.equal(needsRmRefresh({ ...base, rm: { code: 142, checked_at: '2026-10-13T11:58:00Z' } }, now), false);
+  assert.equal(needsRmRefresh({ ...base, rm: { code: 142, checked_at: '2026-10-13T11:50:00Z' } }, now), true);
+  assert.equal(needsRmRefresh({ ...base, rm: { code: 99, checked_at: '2026-10-13T11:59:00Z' } }, now), true);
+});
+
+test('spawnRmRefresh starts a detached rm-refresh.js and never throws', () => {
+  const calls = [];
+  const fake = (cmd, args, opts) => {
+    calls.push({ args, opts });
+    return { unref() { calls.push('unref'); } };
+  };
+  spawnRmRefresh(142, 'C:\\spine', 'C:\\data', fake);
+  assert.match(calls[0].args[0], /rm-refresh\.js$/);
+  assert.deepEqual(calls[0].args.slice(1), ['142', 'C:\\spine', 'C:\\data']);
+  assert.equal(calls[0].opts.detached, true);
+  assert.equal(calls[1], 'unref');
+  assert.doesNotThrow(() => spawnRmRefresh(1, 'x', 'y', () => { throw new Error('boom'); }));
 });
 
 // --- main (CLI dispatch, exercised as a real subprocess) --------------------
