@@ -25,6 +25,14 @@ const {
   handleStatusline,
   handleTodo,
   isTicketFile,
+  isFeatureFile,
+  computeKind,
+  computeFlow,
+  handleSkill,
+  handleAgentLaunch,
+  handleSubagentStart,
+  handleSubagentStop,
+  readContextFromTranscript,
   parseTicket,
   handleSpecTasks,
   isAnyOtherSessionActive,
@@ -455,7 +463,7 @@ test('handleSpecTasks loads every ticket of the feature, sorted, and records the
     sessions.s1.todos.map(t => [t.content, t.status]),
     [['01: Primeiro', 'completed'], ['02: Segundo', 'in_progress'], ['03: Terceiro', 'pending']],
   );
-  assert.deepEqual(sessions.s1.feature, { slug: 'demo' });
+  assert.deepEqual(sessions.s1.feature, { slug: 'demo', has_spec: false, tickets_total: 3, tickets_done: 1 });
   assert.ok(sessions.s1.last_update);
 });
 
@@ -466,6 +474,209 @@ test('handleSpecTasks leaves the session untouched when the folder cannot be rea
     tool_input: { file_path: 'C:\\nao\\existe\\work\\features\\x\\issues\\01-a.md' },
   });
   assert.deepEqual(sessions.s1.todos, [{ content: 'keep', status: 'pending' }]);
+});
+
+// --- readContextFromTranscript / context from transcript ----------------------
+
+function writeTranscript(lines) {
+  const file = path.join(tmpDir(), 'transcript.jsonl');
+  fs.writeFileSync(file, lines.map(l => (typeof l === 'string' ? l : JSON.stringify(l))).join('\n') + '\n');
+  return file;
+}
+
+function assistantLine(usage, model = 'claude-sonnet-5-5') {
+  return { type: 'assistant', message: { model, usage } };
+}
+
+test('readContextFromTranscript sums input and cache tokens of the last assistant message', () => {
+  const file = writeTranscript([
+    assistantLine({ input_tokens: 5, cache_read_input_tokens: 1000 }),
+    { type: 'user', message: { content: 'oi' } },
+    assistantLine({ input_tokens: 2, cache_creation_input_tokens: 600, cache_read_input_tokens: 105914 }),
+  ]);
+  assert.deepEqual(readContextFromTranscript(file), { tokens: 106516, model: 'claude-sonnet-5-5' });
+});
+
+test('readContextFromTranscript skips malformed lines and returns null without any usage', () => {
+  const file = writeTranscript(['{not json', { type: 'user', message: {} }]);
+  assert.equal(readContextFromTranscript(file), null);
+});
+
+test('readContextFromTranscript returns null for a missing file or a non-string path', () => {
+  assert.equal(readContextFromTranscript(path.join(tmpDir(), 'nope.jsonl')), null);
+  assert.equal(readContextFromTranscript(undefined), null);
+});
+
+test('readContextFromTranscript only reads the tail of a large transcript', () => {
+  const filler = 'x'.repeat(300 * 1024);
+  const file = writeTranscript([
+    assistantLine({ input_tokens: 999999 }),
+    { type: 'user', message: { content: filler } },
+    assistantLine({ input_tokens: 10, cache_read_input_tokens: 90 }),
+  ]);
+  assert.equal(readContextFromTranscript(file).tokens, 100);
+});
+
+test('handleIdle derives context_pct from the transcript against a 200k window', () => {
+  const file = writeTranscript([assistantLine({ input_tokens: 0, cache_read_input_tokens: 100000 })]);
+  const sessions = { s1: { status: 'running', context_pct: null } };
+  handleIdle(sessions, { session_id: 's1', transcript_path: file });
+  assert.equal(sessions.s1.context_pct, 50);
+  assert.equal(sessions.s1.context_tokens, 100000);
+  assert.equal(sessions.s1.context_source, 'transcript');
+});
+
+test('handleIdle does not overwrite a statusline-provided context_pct', () => {
+  const file = writeTranscript([assistantLine({ input_tokens: 0, cache_read_input_tokens: 100000 })]);
+  const sessions = { s1: { status: 'running', context_pct: 33, context_source: 'statusline' } };
+  handleIdle(sessions, { session_id: 's1', transcript_path: file });
+  assert.equal(sessions.s1.context_pct, 33);
+  assert.equal(sessions.s1.context_tokens, 100000);
+});
+
+test('handleIdle caps context_pct at 100 and leaves it alone when the transcript is unreadable', () => {
+  const big = writeTranscript([assistantLine({ input_tokens: 0, cache_read_input_tokens: 500000 })]);
+  const a = { s1: { status: 'running', context_pct: null } };
+  handleIdle(a, { session_id: 's1', transcript_path: big });
+  assert.equal(a.s1.context_pct, 100);
+
+  const b = { s1: { status: 'running', context_pct: 12 } };
+  handleIdle(b, { session_id: 's1', transcript_path: path.join(tmpDir(), 'nope.jsonl') });
+  assert.equal(b.s1.context_pct, 12);
+});
+
+// --- skills, kind and flow ----------------------------------------------------
+
+test('handleSkill records the skill name, ignores empty names and unknown sessions', () => {
+  const sessions = { s1: { skills: [] } };
+  handleSkill(sessions, { session_id: 's1', tool_input: { skill: 'code-review' } });
+  handleSkill(sessions, { session_id: 's1', tool_input: { skill: '  ' } });
+  handleSkill(sessions, { session_id: 'nope', tool_input: { skill: 'commit' } });
+  assert.deepEqual(sessions.s1.skills.map(s => s.name), ['code-review']);
+  assert.ok(sessions.s1.skills[0].at);
+});
+
+test('computeKind: feature-only skills mean feature, diagnosing-bugs means bugfix, otherwise null', () => {
+  assert.equal(computeKind({ skills: [{ name: 'to-spec' }] }), 'feature');
+  assert.equal(computeKind({ skills: [{ name: 'implement-spec' }] }), 'feature');
+  assert.equal(computeKind({ skills: [], feature: { slug: 'x' } }), 'feature');
+  assert.equal(computeKind({ skills: [{ name: 'diagnosing-bugs' }] }), 'bugfix');
+  assert.equal(computeKind({ skills: [{ name: 'commit' }, { name: 'superpowers:brainstorming' }] }), null);
+  assert.equal(computeKind({}), null);
+});
+
+test('computeKind strips a plugin prefix from the skill name', () => {
+  assert.equal(computeKind({ skills: [{ name: 'spine:to-tickets' }] }), 'feature');
+});
+
+test('handleSkill sets kind and a flow with the last invoked stage as current', () => {
+  const sessions = {
+    s1: { feature: { slug: 'demo', has_spec: true, tickets_total: 0, tickets_done: 0 }, skills: [] },
+  };
+  handleSkill(sessions, { session_id: 's1', tool_input: { skill: 'grill-with-docs' } });
+  handleSkill(sessions, { session_id: 's1', tool_input: { skill: 'to-spec' } });
+  assert.equal(sessions.s1.kind, 'feature');
+  const byId = Object.fromEntries(sessions.s1.flow.map(s => [s.id, s.state]));
+  assert.equal(byId.grill, 'done');
+  assert.equal(byId.spec, 'current');
+  assert.equal(byId.tickets, 'pending');
+  assert.equal(sessions.s1.flow.length, 7);
+});
+
+test('computeFlow merges skills of every session on the same feature and uses artifacts as evidence', () => {
+  const feature = { slug: 'demo', has_spec: true, tickets_total: 3, tickets_done: 3 };
+  const sessions = {
+    old: { feature, skills: [{ name: 'to-spec', at: '2026-10-10T10:00:00Z' }, { name: 'to-tickets', at: '2026-10-10T11:00:00Z' }] },
+    now: { feature, skills: [{ name: 'code-review', at: '2026-10-13T09:00:00Z' }] },
+    other: { feature: { slug: 'outra', has_spec: false, tickets_total: 0, tickets_done: 0 }, skills: [{ name: 'commit', at: '2026-10-13T10:00:00Z' }] },
+  };
+  const byId = Object.fromEntries(computeFlow(sessions, sessions.now).map(s => [s.id, s.state]));
+  assert.equal(byId.spec, 'done');
+  assert.equal(byId.tickets, 'done');
+  assert.equal(byId.implement, 'done'); // todos os tickets completed
+  assert.equal(byId.review, 'current');
+  assert.equal(byId.commit, 'pending'); // a skill commit e de outra feature
+});
+
+test('computeFlow is null without a feature slug', () => {
+  assert.equal(computeFlow({}, { skills: [] }), null);
+});
+
+// --- agents and subagents -----------------------------------------------------
+
+test('subagent lifecycle: launch description is bound to the matching start, stop records summary', () => {
+  const sessions = { s1: { status: 'running' } };
+  handleAgentLaunch(sessions, {
+    session_id: 's1',
+    tool_input: { subagent_type: 'Explore', description: 'Mapear hooks' },
+  });
+  handleSubagentStart(sessions, { session_id: 's1', agent_id: 'a1', agent_type: 'Explore' });
+  assert.deepEqual(
+    sessions.s1.agents.map(a => [a.id, a.type, a.description, a.status]),
+    [['a1', 'Explore', 'Mapear hooks', 'running']],
+  );
+  assert.deepEqual(sessions.s1.pending_agents, []);
+
+  handleSubagentStop(sessions, {
+    session_id: 's1',
+    agent_id: 'a1',
+    last_assistant_message: 'Achei   3 problemas\nno parser.',
+  });
+  assert.equal(sessions.s1.agents[0].status, 'done');
+  assert.equal(sessions.s1.agents[0].summary, 'Achei 3 problemas no parser.');
+  assert.ok(sessions.s1.agents[0].ended_at);
+});
+
+test('handleSubagentStart ignores duplicates and payloads without agent_id', () => {
+  const sessions = { s1: {} };
+  handleSubagentStart(sessions, { session_id: 's1', agent_type: 'Explore' });
+  handleSubagentStart(sessions, { session_id: 's1', agent_id: 'a1', agent_type: 'Explore' });
+  handleSubagentStart(sessions, { session_id: 's1', agent_id: 'a1', agent_type: 'Explore' });
+  assert.equal(sessions.s1.agents.length, 1);
+});
+
+test('handleSubagentStop creates the agent when the start event was missed', () => {
+  const sessions = { s1: {} };
+  handleSubagentStop(sessions, { session_id: 's1', agent_id: 'late', agent_type: 'Plan', last_assistant_message: 'ok' });
+  assert.deepEqual(sessions.s1.agents.map(a => [a.id, a.type, a.status]), [['late', 'Plan', 'done']]);
+});
+
+test('handleSessionEnd closes agents that are still running', () => {
+  const sessions = { s1: { status: 'running', agents: [{ id: 'a1', status: 'running' }, { id: 'a2', status: 'done' }] } };
+  handleSessionEnd(sessions, { session_id: 's1' });
+  assert.deepEqual(sessions.s1.agents.map(a => a.status), ['done', 'done']);
+  assert.ok(sessions.s1.agents[0].ended_at);
+});
+
+test('agents list is capped and keeps running agents over finished ones', () => {
+  const sessions = { s1: { agents: [{ id: 'running', type: 't', status: 'running' }] } };
+  for (let i = 0; i < 30; i++) {
+    handleSubagentStart(sessions, { session_id: 's1', agent_id: `a${i}`, agent_type: 't' });
+    handleSubagentStop(sessions, { session_id: 's1', agent_id: `a${i}` });
+  }
+  assert.ok(sessions.s1.agents.length <= 20);
+  assert.ok(sessions.s1.agents.some(a => a.id === 'running'));
+});
+
+// --- feature detection from any file in work/features/<slug>/ -----------------
+
+test('isFeatureFile matches the spec, a ticket and progresso.md of a feature, not other files', () => {
+  assert.equal(isFeatureFile('C:\\projects\\sencia\\work\\features\\demo\\13-10-2026-demo.md'), true);
+  assert.equal(isFeatureFile('/c/projects/sencia/work/features/demo/issues/01-a.md'), true);
+  assert.equal(isFeatureFile('C:\\projects\\sencia\\work\\features\\demo\\progresso.md'), true);
+  assert.equal(isFeatureFile('C:\\projects\\sencia\\docs\\adr\\0005.md'), false);
+  assert.equal(isFeatureFile(undefined), false);
+});
+
+test('handleSpecTasks on the spec file records slug and has_spec without touching todos', () => {
+  const dir = makeFeatureDir({});
+  const featureDir = path.dirname(dir);
+  fs.writeFileSync(path.join(featureDir, '13-10-2026-demo.md'), '# Demo (RM-1)');
+  const sessions = { s1: { todos: [{ content: 'keep', status: 'pending' }], skills: [] } };
+  handleSpecTasks(sessions, { session_id: 's1', tool_input: { file_path: path.join(featureDir, '13-10-2026-demo.md') } });
+  assert.deepEqual(sessions.s1.feature, { slug: 'demo', has_spec: true, tickets_total: 0, tickets_done: 0 });
+  assert.deepEqual(sessions.s1.todos, [{ content: 'keep', status: 'pending' }]);
+  assert.equal(sessions.s1.kind, 'feature');
 });
 
 // --- main (CLI dispatch, exercised as a real subprocess) --------------------
@@ -519,7 +730,7 @@ test('main loads the feature tickets from a real spine ticket on a spec-tasks ev
   assert.deepEqual(sessions['cli-spine'].todos, [
     { content: '01: Unica tarefa', status: 'completed', checked: 1, total: 1 },
   ]);
-  assert.deepEqual(sessions['cli-spine'].feature, { slug: 'demo' });
+  assert.deepEqual(sessions['cli-spine'].feature, { slug: 'demo', has_spec: false, tickets_total: 1, tickets_done: 1 });
 });
 
 test('main does not touch sessions.js on a spec-tasks event for an unrelated file (no lock overhead on the hot path)', () => {

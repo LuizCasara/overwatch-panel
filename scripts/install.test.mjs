@@ -30,8 +30,10 @@ test('mergeHooks produces all 6 expected hook events from an empty settings obje
   const eventGroupCounts = {
     SessionStart: 1,
     UserPromptSubmit: 1,
-    PostToolUse: 2, // TodoWrite (todo) + Edit|Write (spec-tasks)
-    PreToolUse: 1,
+    PostToolUse: 3, // TodoWrite (todo) + Edit|Write (spec-tasks) + Skill (skill)
+    PreToolUse: 2, // waiting + Agent|Task (agent-launch)
+    SubagentStart: 1,
+    SubagentStop: 1,
     Stop: 1,
     SessionEnd: 1,
   };
@@ -51,7 +53,13 @@ test('mergeHooks sets the exact matcher values from the hook table (PostToolUse/
   assert.match(result.hooks.PostToolUse[0].hooks[0].command, /overwatch\.js" todo/);
   assert.equal(result.hooks.PostToolUse[1].matcher, 'Edit|Write');
   assert.match(result.hooks.PostToolUse[1].hooks[0].command, /overwatch\.js" spec-tasks/);
+  assert.equal(result.hooks.PostToolUse[2].matcher, 'Skill');
+  assert.match(result.hooks.PostToolUse[2].hooks[0].command, /overwatch\.js" skill/);
   assert.equal(result.hooks.PreToolUse[0].matcher, 'AskUserQuestion|ExitPlanMode');
+  assert.equal(result.hooks.PreToolUse[1].matcher, 'Agent|Task');
+  assert.match(result.hooks.PreToolUse[1].hooks[0].command, /overwatch\.js" agent-launch/);
+  assert.match(result.hooks.SubagentStart[0].hooks[0].command, /overwatch\.js" subagent-start/);
+  assert.match(result.hooks.SubagentStop[0].hooks[0].command, /overwatch\.js" subagent-stop/);
 });
 
 test('mergeHooks preserves pre-existing third-party hook groups', () => {
@@ -79,14 +87,17 @@ test('mergeHooks preserves pre-existing third-party hook groups', () => {
   };
   const result = mergeHooks(settings, REPO_ROOT);
 
-  // Untouched third-party event.
-  assert.deepEqual(result.hooks.SubagentStart, settings.hooks.SubagentStart);
+  // Third-party SubagentStart group stays first; overwatch appends its own.
+  assert.equal(result.hooks.SubagentStart.length, 2);
+  assert.deepEqual(result.hooks.SubagentStart[0], settings.hooks.SubagentStart[0]);
+  assert.match(result.hooks.SubagentStart[1].hooks[0].command, /overwatch\.js" subagent-start/);
 
   // PostToolUse keeps the Skill group and gains one group per overwatch subEvent.
-  assert.equal(result.hooks.PostToolUse.length, 3);
+  assert.equal(result.hooks.PostToolUse.length, 4);
   assert.deepEqual(result.hooks.PostToolUse[0], settings.hooks.PostToolUse[0]);
   assert.match(result.hooks.PostToolUse[1].hooks[0].command, /overwatch\.js" todo/);
   assert.match(result.hooks.PostToolUse[2].hooks[0].command, /overwatch\.js" spec-tasks/);
+  assert.match(result.hooks.PostToolUse[3].hooks[0].command, /overwatch\.js" skill/);
 
   // Stop keeps the notify-stop group and gains a second group for idle.
   assert.equal(result.hooks.Stop.length, 2);

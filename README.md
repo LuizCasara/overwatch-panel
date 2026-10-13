@@ -28,7 +28,7 @@ Ver o design completo em [`docs/design-spec.md`](docs/design-spec.md).
 
 ```mermaid
 flowchart LR
-  CC["Claude Code<br/>(N sessões)"] -->|"hooks: SessionStart, prompt,<br/>todo, waiting, idle, SessionEnd, statusLine"| OW["scripts/overwatch.js<br/>(Node, sem deps)"]
+  CC["Claude Code<br/>(N sessões)"] -->|"hooks: SessionStart, prompt, todo, skill,<br/>subagent, Edit/Write, waiting, idle, SessionEnd"| OW["scripts/overwatch.js<br/>(Node, sem deps)"]
   OW -->|"lock + escrita atômica"| DATA["~/.claude/overwatch-data/sessions.js<br/>window.CLAUDE_SESSIONS = {...}"]
   DATA -->|"&lt;script src&gt; recarregado a cada 30s"| PANEL["panel/overwatch.html<br/>(arquivo local, aberto no navegador)"]
 ```
@@ -40,10 +40,25 @@ custo de tokens é zero e o painel nunca fica desatualizado por "esquecimento".
 
 MVP implementado e testado (`scripts/overwatch.js`, `install.mjs`,
 `panel/overwatch.html`) — ver `.specs/features/session-overwatch-panel/`
-para a spec, o design e a lista completa de tasks. `node install.mjs` ainda
-não foi rodado contra o `~/.claude/settings.json` real desta máquina —
-aguardando o usuário revisar e autorizar essa instalação (ela mescla hooks
-no seu `settings.json` global).
+para a spec, o design e a lista completa de tasks. O `install.mjs` mescla
+hooks no `~/.claude/settings.json` global, é idempotente e preserva os hooks
+de terceiros; rode-o de novo sempre que a tabela de hooks mudar.
+
+### Integração com o spine
+
+Além das sessões, o painel entende o fluxo do spine (`CLAUDE.md` do spine):
+
+| Hook | Evento interno | O que alimenta |
+|---|---|---|
+| `PostToolUse` `Edit\|Write` em `work/features/<slug>/…` | `spec-tasks` | feature (`slug`, spec, tickets feitos/total) e a lista de tickets (`issues/NN-*.md`: `Status:` + checkboxes) |
+| `PostToolUse` `Skill` | `skill` | skills usadas, `kind` (feature / bugfix) e o fluxo grill → spec → tickets → implement → review → commit → retro |
+| `PreToolUse` `Agent\|Task` + `SubagentStart` / `SubagentStop` | `agent-launch`, `subagent-start`, `subagent-stop` | subagentes rodando/concluídos, com descrição e resumo |
+| `Stop` / `UserPromptSubmit` | `idle`, `prompt` | `context_pct` calculado do transcript (o statusline não roda na extensão do VS Code) |
+
+O fluxo é da **feature**, não da sessão: skills de todas as sessões com o
+mesmo `slug` contam, porque o spine manda dar `/clear` entre etapas. Os
+artefatos (spec, `issues/`, tickets `done`) também valem como evidência.
+A janela de contexto assume 200k; use `OVERWATCH_CONTEXT_WINDOW` para outro valor.
 
 ## Testes
 

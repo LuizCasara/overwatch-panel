@@ -186,6 +186,52 @@
 
   .sub-progress > i { display: block; height: 100%; background: var(--status-waiting); }
 
+  .badge {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+  }
+  .badge.feature { color: var(--status-running); border-color: rgba(53, 182, 255, 0.45); }
+  .badge.bugfix { color: var(--status-waiting); border-color: rgba(242, 201, 76, 0.45); }
+  .slug { color: var(--text-primary); }
+
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    margin-bottom: 12px;
+    font-size: 11px;
+  }
+  .flow .step { color: var(--text-dim); opacity: 0.55; }
+  .flow .step.done { color: var(--status-done); opacity: 1; }
+  .flow .step.current {
+    color: var(--status-running);
+    opacity: 1;
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(53, 182, 255, 0.5);
+  }
+  .flow .arrow { color: var(--text-dim); opacity: 0.3; }
+
+  .agents {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 11px;
+  }
+  .agent { display: flex; gap: 8px; align-items: baseline; color: var(--text-dim); }
+  .agent .type { color: var(--text-primary); }
+  .agent.done { opacity: 0.55; }
+  .agent .desc { overflow-wrap: anywhere; }
+  .meta-line { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; }
+  .meta-line b { color: var(--text-primary); font-weight: 400; }
+
   section.archived {
     margin-top: 40px;
     opacity: 0.5;
@@ -280,7 +326,9 @@
     var status = todo && todo.status;
     li.className = 'todo' + (status ? ' ' + status : '');
     var mark = status === 'completed' ? '✔' : status === 'in_progress' ? '▸' : '○';
-    var sub = window.OverwatchFormat.extractSubProgress(todo && todo.content);
+    var sub = todo && todo.total > 0
+      ? { done: todo.checked || 0, total: todo.total }
+      : window.OverwatchFormat.extractSubProgress(todo && todo.content);
     var subHtml = '';
     if (sub && sub.total > 0) {
       var pct = Math.round((sub.done / sub.total) * 100);
@@ -289,6 +337,41 @@
     li.innerHTML =
       '<span class="mark">' + mark + '</span><span>' + escapeHtml(todo && todo.content) + subHtml + '</span>';
     return li;
+  }
+
+  var KIND_LABEL = { feature: 'feature', bugfix: 'bugfix' };
+
+  function renderFlow(flow) {
+    var div = document.createElement('div');
+    div.className = 'flow';
+    var parts = [];
+    flow.forEach(function (step, i) {
+      var mark = step.state === 'done' ? '✔ ' : step.state === 'current' ? '▸ ' : '';
+      if (i > 0) parts.push('<span class="arrow">→</span>');
+      parts.push('<span class="step ' + escapeHtml(step.state) + '">' + mark + escapeHtml(step.label) + '</span>');
+    });
+    div.innerHTML = parts.join('');
+    return div;
+  }
+
+  function renderAgents(agents) {
+    var running = agents.filter(function (a) { return a.status === 'running'; });
+    var finished = agents.filter(function (a) { return a.status !== 'running'; }).slice(-3);
+    var ul = document.createElement('ul');
+    ul.className = 'agents';
+    running.concat(finished).forEach(function (a) {
+      var li = document.createElement('li');
+      li.className = 'agent ' + (a.status === 'running' ? 'running' : 'done');
+      var blip = a.status === 'running' ? 'running pulsing' : 'done';
+      var text = a.description || a.summary || '';
+      var elapsed = a.status === 'running' ? ' · ' + window.OverwatchFormat.formatElapsed(a.started_at) : '';
+      li.innerHTML =
+        '<span class="blip ' + blip + '"></span>' +
+        '<span class="type">' + escapeHtml(a.type) + '</span>' +
+        '<span class="desc">' + escapeHtml(text) + escapeHtml(elapsed) + '</span>';
+      ul.appendChild(li);
+    });
+    return ul;
   }
 
   function renderCard(session) {
@@ -310,13 +393,38 @@
       '<span class="sep">|</span><span>' + escapeHtml(session.branch || '—') + '</span>' +
       '<span class="sep">|</span><span>' + elapsed + '</span>' +
       '<span class="sep">|</span><span>' + contextLabel + '</span>' +
-      '<span class="sep">|</span><span>' + statusLabel + '</span>';
+      '<span class="sep">|</span><span>' + statusLabel + '</span>' +
+      (session.kind && KIND_LABEL[session.kind]
+        ? '<span class="sep">|</span><span class="badge ' + escapeHtml(session.kind) + '">' +
+          KIND_LABEL[session.kind] + '</span>'
+        : '') +
+      (session.feature && session.feature.slug
+        ? '<span class="slug">' + escapeHtml(session.feature.slug) + '</span>'
+        : '');
     article.appendChild(header);
 
     var summary = document.createElement('div');
     summary.className = 'card-summary';
     summary.textContent = session.summary || '(sem prompt ainda)';
     article.appendChild(summary);
+
+    if (Array.isArray(session.flow) && session.flow.length > 0) {
+      article.appendChild(renderFlow(session.flow));
+    }
+
+    var lastSkill = Array.isArray(session.skills) && session.skills.length > 0
+      ? session.skills[session.skills.length - 1]
+      : null;
+    if (lastSkill) {
+      var skillLine = document.createElement('div');
+      skillLine.className = 'meta-line';
+      skillLine.innerHTML = 'skill: <b>' + escapeHtml(lastSkill.name) + '</b>';
+      article.appendChild(skillLine);
+    }
+
+    if (Array.isArray(session.agents) && session.agents.length > 0) {
+      article.appendChild(renderAgents(session.agents));
+    }
 
     if (Array.isArray(session.todos) && session.todos.length > 0) {
       var overall = window.OverwatchFormat.computeOverallProgress(session.todos);

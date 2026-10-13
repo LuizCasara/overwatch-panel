@@ -158,6 +158,70 @@ function resolveBranch(cwd) {
   }
 }
 
+// O statusline so roda no terminal; na extensao do VS Code ele nunca dispara
+// e o context_pct ficava nulo. O transcript tem o uso real da ultima resposta
+// (input + cache), entao o hook Stop/prompt calcula o contexto a partir dele.
+const TRANSCRIPT_TAIL_BYTES = 256 * 1024;
+const DEFAULT_CONTEXT_WINDOW = 200000;
+const LARGE_CONTEXT_WINDOW = 1000000;
+
+function contextWindowFor(model) {
+  const fromEnv = Number(process.env.OVERWATCH_CONTEXT_WINDOW);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  return typeof model === 'string' && model.includes('[1m]') ? LARGE_CONTEXT_WINDOW : DEFAULT_CONTEXT_WINDOW;
+}
+
+// Le so o fim do arquivo: o transcript cresce sem parar e este hook roda a
+// cada fim de turno. Retorna { tokens, model } da ultima resposta do
+// assistente, ou null se nao achar uso.
+function readContextFromTranscript(transcriptPath, fsApi = fs) {
+  if (typeof transcriptPath !== 'string' || !transcriptPath) return null;
+  let fd;
+  try {
+    fd = fsApi.openSync(transcriptPath, 'r');
+    const size = fsApi.fstatSync(fd).size;
+    const length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
+    const buf = Buffer.alloc(length);
+    fsApi.readSync(fd, buf, 0, length, size - length);
+    const lines = buf.toString('utf8').split('\n');
+    if (size > length) lines.shift(); // primeira linha pode estar cortada
+    for (let i = lines.length - 1; i >= 0; i--) {
+      let entry;
+      try {
+        entry = JSON.parse(lines[i]);
+      } catch {
+        continue;
+      }
+      const usage = entry && entry.type === 'assistant' && entry.message && entry.message.usage;
+      if (!usage) continue;
+      const tokens =
+        (usage.input_tokens || 0) + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
+      if (tokens > 0) return { tokens, model: entry.message.model };
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fsApi.closeSync(fd);
+      } catch {
+        // nada a fazer
+      }
+    }
+  }
+}
+
+function applyTranscriptContext(entry, payload) {
+  const ctx = readContextFromTranscript(payload.transcript_path);
+  if (!ctx) return;
+  entry.context_tokens = ctx.tokens;
+  // O statusline, quando existe, e mais exato: nao deixa o transcript sobrescrever.
+  if (entry.context_source === 'statusline') return;
+  entry.context_pct = Math.min(100, Math.round((ctx.tokens / contextWindowFor(ctx.model)) * 100));
+  entry.context_source = 'transcript';
+}
+
 function handleSessionStart(sessions, payload) {
   const sessionId = payload.session_id;
   if (!sessionId) return;
@@ -189,6 +253,7 @@ function handlePrompt(sessions, payload) {
   sessions[sessionId].status = 'running';
   sessions[sessionId].ended_at = null;
   sessions[sessionId].last_update = new Date().toISOString();
+  applyTranscriptContext(sessions[sessionId], payload);
 }
 
 function handleWaiting(sessions, payload) {
@@ -203,6 +268,7 @@ function handleIdle(sessions, payload) {
   if (!entry) return;
   entry.status = 'idle';
   entry.last_update = new Date().toISOString();
+  applyTranscriptContext(entry, payload);
 }
 
 function handleSessionEnd(sessions, payload) {
@@ -212,6 +278,12 @@ function handleSessionEnd(sessions, payload) {
   entry.ended_at = now;
   entry.status = 'ended';
   entry.last_update = now;
+  for (const agent of entry.agents || []) {
+    if (agent.status === 'running') {
+      agent.status = 'done';
+      agent.ended_at = now;
+    }
+  }
 }
 
 function handleStatusline(sessions, payload) {
@@ -222,6 +294,7 @@ function handleStatusline(sessions, payload) {
   const contextPct = Math.round(usedPct);
   if (entry.context_pct === contextPct) return;
   entry.context_pct = contextPct;
+  entry.context_source = 'statusline';
   entry.last_update = new Date().toISOString();
 }
 
@@ -266,18 +339,17 @@ function parseTicket(content, fileName) {
   return { content: `${number}: ${title}`, status, checked, total: checked + unchecked };
 }
 
-function readFeatureTickets(ticketPath, fsApi = fs) {
-  const dir = path.dirname(ticketPath);
+function readFeatureTickets(issuesDir, fsApi = fs) {
   let names;
   try {
-    names = fsApi.readdirSync(dir).filter(n => /^\d+-.+\.md$/.test(n)).sort();
+    names = fsApi.readdirSync(issuesDir).filter(n => /^\d+-.+\.md$/.test(n)).sort();
   } catch {
     return [];
   }
   const tickets = [];
   for (const name of names) {
     try {
-      tickets.push(parseTicket(fsApi.readFileSync(path.join(dir, name), 'utf8'), name));
+      tickets.push(parseTicket(fsApi.readFileSync(path.join(issuesDir, name), 'utf8'), name));
     } catch {
       // ticket ilegivel: segue com os outros
     }
@@ -285,18 +357,181 @@ function readFeatureTickets(ticketPath, fsApi = fs) {
   return tickets;
 }
 
-// Edit/Write num ticket relê a pasta inteira: o painel mostra a lista
-// completa de tickets da feature, nao so o que foi editado.
+// Qualquer arquivo dentro de work/features/<slug>/ liga a sessao a feature:
+// a spec (DD-MM-AAAA-<slug>.md), os tickets (issues/NN-*.md) ou o progresso.md.
+const FEATURE_DIR_RE = /^(.*[\\/]work[\\/]features[\\/]([^\\/]+))[\\/]/;
+const SPEC_FILE_RE = /^\d{2}-\d{2}-\d{4}-.+\.md$/;
+
+function isFeatureFile(filePath) {
+  return typeof filePath === 'string' && FEATURE_DIR_RE.test(filePath);
+}
+
+// Edit/Write numa feature relê a pasta inteira: o painel mostra a lista
+// completa de tickets, nao so o que foi editado.
 function handleSpecTasks(sessions, payload, fsApi = fs) {
   const entry = sessions[payload.session_id];
   if (!entry) return;
   const filePath = payload.tool_input && payload.tool_input.file_path;
-  if (!isTicketFile(filePath)) return;
-  const tickets = readFeatureTickets(filePath, fsApi);
-  if (tickets.length === 0) return;
-  entry.todos = tickets;
-  entry.feature = { slug: filePath.match(TICKET_FILE_RE)[1] };
+  if (!isFeatureFile(filePath)) return;
+  const [, featureDir, slug] = filePath.match(FEATURE_DIR_RE);
+
+  const tickets = readFeatureTickets(path.join(featureDir, 'issues'), fsApi);
+  let hasSpec = false;
+  try {
+    hasSpec = fsApi.readdirSync(featureDir).some(n => SPEC_FILE_RE.test(n));
+  } catch {
+    // pasta ilegivel
+  }
+  if (tickets.length === 0 && !hasSpec) return;
+
+  if (tickets.length > 0) entry.todos = tickets;
+  entry.feature = {
+    slug,
+    has_spec: hasSpec,
+    tickets_total: tickets.length,
+    tickets_done: tickets.filter(t => t.status === 'completed').length,
+  };
+  refreshDerived(sessions, entry);
   entry.last_update = new Date().toISOString();
+}
+
+// --- Fluxo do spine: skills, agentes e subagentes ---------------------------
+// Fluxo: grill -> spec -> tickets -> implement -> review -> commit -> retro
+// (CLAUDE.md do spine, secao Agent skills).
+
+const FLOW_STAGES = [
+  { id: 'grill', label: 'grill', skills: ['grill-with-docs', 'grill-me', 'grilling'] },
+  { id: 'spec', label: 'spec', skills: ['to-spec'] },
+  { id: 'tickets', label: 'tickets', skills: ['to-tickets'] },
+  { id: 'implement', label: 'implement', skills: ['implement', 'implement-spec'] },
+  { id: 'review', label: 'review', skills: ['code-review'] },
+  { id: 'commit', label: 'commit', skills: ['commit', 'pr'] },
+  { id: 'retro', label: 'retro', skills: ['retro'] },
+];
+const FEATURE_ONLY_SKILLS = ['to-spec', 'to-tickets', 'implement-spec'];
+const BUGFIX_SKILLS = ['diagnosing-bugs', 'wait-what'];
+const MAX_SKILLS = 40;
+const MAX_AGENTS = 20;
+const MAX_PENDING_AGENTS = 10;
+const SUMMARY_MAX = 140;
+
+// "superpowers:brainstorming" -> "brainstorming"
+function baseSkillName(name) {
+  return String(name).split(':').pop();
+}
+
+function stageOfSkill(name) {
+  const base = baseSkillName(name);
+  const stage = FLOW_STAGES.find(s => s.skills.includes(base));
+  return stage ? stage.id : null;
+}
+
+function computeKind(entry) {
+  const names = (entry.skills || []).map(s => baseSkillName(s.name));
+  if (entry.feature || names.some(n => FEATURE_ONLY_SKILLS.includes(n))) return 'feature';
+  if (names.some(n => BUGFIX_SKILLS.includes(n))) return 'bugfix';
+  return null;
+}
+
+// O fluxo e da feature, nao da sessao: o spine manda dar /clear entre etapas
+// (implement-spec retoma do progresso.md), entao as skills de todas as sessoes
+// da mesma feature contam. Artefatos tambem valem como evidencia.
+function computeFlow(sessions, entry) {
+  const slug = entry.feature && entry.feature.slug;
+  if (!slug) return null;
+  const related = Object.values(sessions).filter(s => s.feature && s.feature.slug === slug);
+  const done = new Set();
+  let lastStage = null;
+  let lastAt = '';
+  for (const s of related) {
+    for (const sk of s.skills || []) {
+      const stage = stageOfSkill(sk.name);
+      if (!stage) continue;
+      done.add(stage);
+      if (sk.at >= lastAt) {
+        lastAt = sk.at;
+        lastStage = stage;
+      }
+    }
+  }
+  const f = entry.feature;
+  if (f.has_spec) done.add('spec');
+  if (f.tickets_total > 0) done.add('tickets');
+  if (f.tickets_total > 0 && f.tickets_done === f.tickets_total) done.add('implement');
+  return FLOW_STAGES.map(s => ({
+    id: s.id,
+    label: s.label,
+    state: s.id === lastStage ? 'current' : done.has(s.id) ? 'done' : 'pending',
+  }));
+}
+
+function refreshDerived(sessions, entry) {
+  entry.kind = computeKind(entry);
+  entry.flow = entry.kind === 'feature' ? computeFlow(sessions, entry) : null;
+}
+
+function handleSkill(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry) return;
+  const input = payload.tool_input || {};
+  const name = typeof input.skill === 'string' ? input.skill : typeof input.name === 'string' ? input.name : '';
+  if (!name.trim()) return;
+  const now = new Date().toISOString();
+  entry.skills = [...(entry.skills || []), { name: name.trim(), at: now }].slice(-MAX_SKILLS);
+  refreshDerived(sessions, entry);
+  entry.last_update = now;
+}
+
+// PreToolUse do Agent/Task: o SubagentStart nao traz a descricao, so o tipo.
+// Guardamos a descricao na fila e o proximo SubagentStart do mesmo tipo a consome.
+function handleAgentLaunch(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry) return;
+  const input = payload.tool_input || {};
+  const type = input.subagent_type || input.agent_type || 'general-purpose';
+  const description = typeof input.description === 'string' ? input.description.slice(0, SUMMARY_MAX) : '';
+  entry.pending_agents = [...(entry.pending_agents || []), { type, description }].slice(-MAX_PENDING_AGENTS);
+}
+
+function trimAgents(agents) {
+  if (agents.length <= MAX_AGENTS) return agents;
+  const running = agents.filter(a => a.status === 'running');
+  const finished = agents.filter(a => a.status !== 'running');
+  return [...finished.slice(-(MAX_AGENTS - running.length)), ...running].slice(-MAX_AGENTS);
+}
+
+function handleSubagentStart(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry || !payload.agent_id) return;
+  const agents = [...(entry.agents || [])];
+  if (agents.some(a => a.id === payload.agent_id)) return;
+  const type = payload.agent_type || 'agent';
+  const pending = entry.pending_agents || [];
+  const idx = pending.findIndex(p => p.type === type);
+  const description = idx >= 0 ? pending[idx].description : '';
+  if (idx >= 0) entry.pending_agents = pending.filter((_, i) => i !== idx);
+  const now = new Date().toISOString();
+  agents.push({ id: payload.agent_id, type, description, status: 'running', started_at: now, ended_at: null, summary: '' });
+  entry.agents = trimAgents(agents);
+  entry.last_update = now;
+}
+
+function handleSubagentStop(sessions, payload) {
+  const entry = sessions[payload.session_id];
+  if (!entry || !payload.agent_id) return;
+  const now = new Date().toISOString();
+  const agents = [...(entry.agents || [])];
+  let agent = agents.find(a => a.id === payload.agent_id);
+  if (!agent) {
+    agent = { id: payload.agent_id, type: payload.agent_type || 'agent', description: '', started_at: now };
+    agents.push(agent);
+  }
+  agent.status = 'done';
+  agent.ended_at = now;
+  const last = typeof payload.last_assistant_message === 'string' ? payload.last_assistant_message : '';
+  agent.summary = last.replace(/\s+/g, ' ').trim().slice(0, SUMMARY_MAX);
+  entry.agents = trimAgents(agents);
+  entry.last_update = now;
 }
 
 const ACTIVE_TTL_MS = 20 * 60 * 1000;
@@ -332,6 +567,10 @@ const EVENT_HANDLERS = {
   'session-end': handleSessionEnd,
   statusline: handleStatusline,
   'spec-tasks': handleSpecTasks,
+  skill: handleSkill,
+  'agent-launch': handleAgentLaunch,
+  'subagent-start': handleSubagentStart,
+  'subagent-stop': handleSubagentStop,
 };
 
 function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
@@ -342,7 +581,7 @@ function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
   // spec-tasks fires on every Edit/Write in every session, for any project -
   // filter by file_path before touching the sessions.js lock so editing
   // unrelated files never pays that cost.
-  if (event === 'spec-tasks' && !isTicketFile(payload.tool_input && payload.tool_input.file_path)) return;
+  if (event === 'spec-tasks' && !isFeatureFile(payload.tool_input && payload.tool_input.file_path)) return;
   withSessionsLock(dataDir, sessions => handler(sessions, payload));
   // SPEC_DEVIATION: design.md originally called openPanelIfFirstSession from
   // inside handleSessionStart. Moved here so the pure handler stays free of
@@ -371,9 +610,17 @@ module.exports = {
   handleStatusline,
   handleTodo,
   isTicketFile,
+  readContextFromTranscript,
   parseTicket,
-  readFeatureTickets,
   handleSpecTasks,
+  isFeatureFile,
+  readFeatureTickets,
+  computeKind,
+  computeFlow,
+  handleSkill,
+  handleAgentLaunch,
+  handleSubagentStart,
+  handleSubagentStop,
   isAnyOtherSessionActive,
   openPanelIfFirstSession,
   main,
