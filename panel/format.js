@@ -43,5 +43,33 @@
     return nowMs - lastUpdateMs > ttlMs;
   }
 
-  return { formatElapsed, extractSubProgress, computeOverallProgress, isExpired };
+  // Separa as sessoes em tres grupos: ativas, ociosas (sem atividade ha mais do TTL
+  // ou encerradas) e arquivadas. Arquivar e sempre uma acao explicita do usuario:
+  // archivedMap guarda, por id, o last_update no momento do clique. Sessao com
+  // atividade posterior volta sozinha para ativa. Ociosas e arquivadas vem das
+  // mais recentes para as mais antigas.
+  function partitionSessions(sessions, archivedMap, nowMs = Date.now(), ttlMs) {
+    const marks = archivedMap || {};
+    const out = { active: [], idle: [], archived: [] };
+    Object.keys(sessions || {}).forEach(id => {
+      const session = sessions[id];
+      if (!session) return;
+      const entry = { id, session };
+      const mark = marks[id];
+      const revived = mark !== undefined && Date.parse(session.last_update) > Date.parse(mark);
+      if (mark !== undefined && !revived) out.archived.push(entry);
+      else if (session.status === 'ended' || isExpired(session.last_update, nowMs, ttlMs)) out.idle.push(entry);
+      else out.active.push(entry);
+    });
+    const byRecent = (a, b) => {
+      const am = Date.parse(a.session.last_update);
+      const bm = Date.parse(b.session.last_update);
+      return (Number.isNaN(bm) ? -Infinity : bm) - (Number.isNaN(am) ? -Infinity : am);
+    };
+    out.idle.sort(byRecent);
+    out.archived.sort(byRecent);
+    return out;
+  }
+
+  return { formatElapsed, extractSubProgress, computeOverallProgress, isExpired, partitionSessions };
 });

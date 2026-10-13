@@ -129,16 +129,42 @@
 
   .card-header {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 5px;
     font-size: 12px;
-    flex-wrap: wrap;
     color: var(--text-dim);
     margin-bottom: 10px;
   }
 
-  .card-header .project { color: var(--text-primary); font-weight: 700; }
-  .card-header .sep { opacity: 0.4; }
+  .card-title,
+  .card-meta {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .card-title { gap: 8px; }
+  .card-title .project { color: var(--text-primary); font-weight: 700; flex: none; }
+  .card-title .branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+  /* separadores desenhados por CSS: nunca sobra um "·" sozinho numa quebra */
+  .card-meta { gap: 0 14px; font-size: 11px; padding-left: 17px; }
+  .card-meta > * { flex: none; position: relative; }
+  .card-meta > * + *::before {
+    content: "";
+    position: absolute;
+    left: -8px;
+    top: 50%;
+    width: 2px;
+    height: 2px;
+    margin-top: -1px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.5;
+  }
+  .card-meta > .slug-item { display: flex; flex: 0 1 auto; min-width: 0; }
+  .card-meta .slug { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
   .card-summary {
     font-size: 13px;
@@ -261,22 +287,62 @@
     font-weight: 700;
   }
 
-  section.archived {
-    margin-top: 40px;
-    opacity: 0.5;
-  }
+  section.idle-section { margin-top: 40px; }
 
-  section.archived h2 {
+  section.idle-section h2,
+  details.archived > summary {
     font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.14em;
     color: var(--text-dim);
-    margin-bottom: 12px;
+    margin: 0 0 12px;
   }
+
+  details.archived { margin-top: 40px; }
+  details.archived > summary { cursor: pointer; user-select: none; }
+  details.archived[open] > summary { margin-bottom: 12px; }
+  details.archived > .grid { opacity: 0.5; }
+
+  .count {
+    font-weight: 400;
+    padding: 1px 7px;
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    letter-spacing: 0;
+    margin-left: 6px;
+  }
+
+  .card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  .card-actions .action {
+    font: inherit;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--panel-border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .card-actions .action:hover { color: var(--text-primary); border-color: var(--text-dim); }
+  .card-actions .action.open:hover { color: var(--status-running); border-color: rgba(53, 182, 255, 0.45); }
 
   @media (max-width: 480px) {
     body { padding: 16px 12px 32px; }
     .card-header { font-size: 11px; }
+    .card-meta { font-size: 10px; }
   }
 </style>
 </head>
@@ -302,10 +368,15 @@
 
   <main id="active-grid" class="grid"></main>
 
-  <section class="archived" hidden>
-    <h2>Arquivadas</h2>
-    <div id="archived-grid" class="grid"></div>
+  <section class="idle-section" id="idle-section" hidden>
+    <h2>Ociosas <span class="count" id="idle-count">0</span></h2>
+    <div id="idle-grid" class="grid"></div>
   </section>
+
+  <details class="archived" id="archived-section" hidden>
+    <summary>Arquivadas <span class="count" id="archived-count">0</span></summary>
+    <div id="archived-grid" class="grid"></div>
+  </details>
 </div>
 <script src="panel-config.js"></script>
 <script src="format.js"></script>
@@ -315,8 +386,47 @@
 
   var POLL_MS = 30000;
   var activeGrid = document.getElementById('active-grid');
+  var idleGrid = document.getElementById('idle-grid');
+  var idleSection = document.getElementById('idle-section');
+  var idleCount = document.getElementById('idle-count');
   var archivedGrid = document.getElementById('archived-grid');
-  var archivedSection = document.querySelector('section.archived');
+  var archivedSection = document.getElementById('archived-section');
+  var archivedCount = document.getElementById('archived-count');
+  var ARCHIVE_KEY = 'overwatch-archived';
+  var VSCODE_OPEN_URL = 'vscode://anthropic.claude-code/open?session=';
+  var SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var lastSessions = {};
+  var memoryArchive = {};
+
+  // id -> last_update no momento em que o usuario clicou em ARQUIVAR.
+  function loadArchive() {
+    try {
+      var raw = window.localStorage.getItem(ARCHIVE_KEY);
+      var parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+      return memoryArchive;
+    }
+  }
+
+  function saveArchive(map) {
+    memoryArchive = map;
+    try {
+      window.localStorage.setItem(ARCHIVE_KEY, JSON.stringify(map));
+    } catch (e) { /* sem storage: vale so ate recarregar */ }
+  }
+
+  function setArchived(id, archived) {
+    var map = loadArchive();
+    if (archived) {
+      var s = lastSessions[id];
+      map[id] = (s && s.last_update) || new Date().toISOString();
+    } else {
+      delete map[id];
+    }
+    saveArchive(map);
+    render(lastSessions);
+  }
   var emptyState = document.getElementById('empty-state');
   var configMissing = document.getElementById('config-missing');
 
@@ -465,20 +575,25 @@
 
     var header = document.createElement('div');
     header.className = 'card-header';
+    var branch = escapeHtml(session.branch || '—');
     header.innerHTML =
-      '<span class="blip ' + blipClass + '"></span>' +
-      '<span class="project">' + escapeHtml(session.project || '—') + '</span>' +
-      '<span class="sep">|</span><span>' + escapeHtml(session.branch || '—') + '</span>' +
-      '<span class="sep">|</span><span>' + elapsed + '</span>' +
-      '<span class="sep">|</span><span>' + contextLabel + '</span>' +
-      '<span class="sep">|</span><span>' + statusLabel + '</span>' +
-      (session.kind && KIND_LABEL[session.kind]
-        ? '<span class="sep">|</span><span class="badge ' + escapeHtml(session.kind) + '">' +
-          KIND_LABEL[session.kind] + '</span>'
-        : '') +
-      (session.feature && session.feature.slug
-        ? '<span class="slug">' + escapeHtml(session.feature.slug) + '</span>'
-        : '');
+      '<div class="card-title">' +
+        '<span class="blip ' + blipClass + '"></span>' +
+        '<span class="project">' + escapeHtml(session.project || '—') + '</span>' +
+        '<span class="branch" title="' + branch + '">' + branch + '</span>' +
+      '</div>' +
+      '<div class="card-meta">' +
+        '<span>' + elapsed + '</span>' +
+        '<span>' + contextLabel + '</span>' +
+        '<span>' + statusLabel + '</span>' +
+        (session.kind && KIND_LABEL[session.kind]
+          ? '<span class="badge ' + escapeHtml(session.kind) + '">' + KIND_LABEL[session.kind] + '</span>'
+          : '') +
+        (session.feature && session.feature.slug
+          ? '<span class="slug-item"><span class="slug" title="' + escapeHtml(session.feature.slug) + '">' +
+            escapeHtml(session.feature.slug) + '</span></span>'
+          : '') +
+      '</div>';
     article.appendChild(header);
 
     var summary = document.createElement('div');
@@ -527,37 +642,64 @@
     return article;
   }
 
+  function renderActions(session, id, mode) {
+    var row = document.createElement('div');
+    row.className = 'card-actions';
+    var sid = session.session_id || id;
+    if (SESSION_ID_RE.test(sid)) {
+      var open = document.createElement('a');
+      open.className = 'action open';
+      open.href = VSCODE_OPEN_URL + sid;
+      open.title = 'Abre esta conversa no VS Code';
+      open.textContent = 'Abrir no VS Code';
+      row.appendChild(open);
+    }
+    if (mode !== 'active') {
+      var toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'action';
+      toggle.textContent = mode === 'archived' ? 'Desarquivar' : 'Arquivar';
+      toggle.addEventListener('click', function () {
+        setArchived(id, mode !== 'archived');
+      });
+      row.appendChild(toggle);
+    }
+    return row;
+  }
+
+  function renderInto(grid, entries, mode) {
+    entries.forEach(function (entry) {
+      var card = renderCard(entry.session);
+      card.appendChild(renderActions(entry.session, entry.id, mode));
+      grid.appendChild(card);
+    });
+  }
+
   function render(sessions) {
-    var ids = Object.keys(sessions || {});
+    lastSessions = sessions || {};
     activeGrid.innerHTML = '';
+    idleGrid.innerHTML = '';
     archivedGrid.innerHTML = '';
 
-    if (ids.length === 0) {
+    if (Object.keys(lastSessions).length === 0) {
       emptyState.hidden = false;
       emptyState.textContent = 'Nenhuma sessao registrada ainda.';
+      idleSection.hidden = true;
       archivedSection.hidden = true;
       return;
     }
 
-    var now = Date.now();
-    var activeCount = 0;
-    var archivedCount = 0;
+    var groups = window.OverwatchFormat.partitionSessions(lastSessions, loadArchive(), Date.now());
+    renderInto(activeGrid, groups.active, 'active');
+    renderInto(idleGrid, groups.idle, 'idle');
+    renderInto(archivedGrid, groups.archived, 'archived');
 
-    ids.forEach(function (id) {
-      var session = sessions[id];
-      var expired = session.status === 'ended' || window.OverwatchFormat.isExpired(session.last_update, now);
-      var card = renderCard(session);
-      if (expired) {
-        archivedGrid.appendChild(card);
-        archivedCount++;
-      } else {
-        activeGrid.appendChild(card);
-        activeCount++;
-      }
-    });
+    idleCount.textContent = groups.idle.length;
+    archivedCount.textContent = groups.archived.length;
+    idleSection.hidden = groups.idle.length === 0;
+    archivedSection.hidden = groups.archived.length === 0;
 
-    archivedSection.hidden = archivedCount === 0;
-    if (activeCount === 0 && archivedCount > 0) {
+    if (groups.active.length === 0) {
       emptyState.hidden = false;
       emptyState.textContent = 'Nenhuma sessao ativa no momento.';
     } else {

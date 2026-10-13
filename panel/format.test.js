@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { formatElapsed, extractSubProgress, computeOverallProgress, isExpired } = require('./format.js');
+const { formatElapsed, extractSubProgress, computeOverallProgress, isExpired, partitionSessions } = require('./format.js');
 
 // --- extractSubProgress ------------------------------------------------------
 
@@ -45,6 +45,41 @@ test('isExpired is false at exactly the 20 minute boundary ("mais de 20min" = st
   const now = Date.now();
   const exactlyTwentyMinAgo = new Date(now - 20 * 60 * 1000).toISOString();
   assert.equal(isExpired(exactlyTwentyMinAgo, now), false);
+});
+
+// --- partitionSessions ---------------------------------------------------------
+
+test('partitionSessions: idle by TTL or ended, sorted newest first; never archived without a mark', () => {
+  const now = Date.now();
+  const ago = min => new Date(now - min * 60 * 1000).toISOString();
+  const groups = partitionSessions({
+    fresh: { status: 'running', last_update: ago(1) },
+    old: { status: 'idle', last_update: ago(300) },
+    older: { status: 'idle', last_update: ago(900) },
+    newer: { status: 'waiting', last_update: ago(30) },
+    done: { status: 'ended', last_update: ago(2) },
+  }, {}, now);
+  assert.deepEqual(groups.active.map(e => e.id), ['fresh']);
+  assert.deepEqual(groups.idle.map(e => e.id), ['done', 'newer', 'old', 'older']);
+  assert.deepEqual(groups.archived, []);
+});
+
+test('partitionSessions: archived only with an explicit mark; newer activity revives it', () => {
+  const now = Date.now();
+  const ago = min => new Date(now - min * 60 * 1000).toISOString();
+  const groups = partitionSessions({
+    kept: { status: 'idle', last_update: ago(100) },
+    revived: { status: 'running', last_update: ago(1) },
+    other: { status: 'idle', last_update: ago(500) },
+  }, { kept: ago(100), revived: ago(50), other: ago(500) }, now);
+  assert.deepEqual(groups.archived.map(e => e.id), ['kept', 'other']);
+  assert.deepEqual(groups.active.map(e => e.id), ['revived']);
+});
+
+test('partitionSessions tolerates empty input and invalid dates', () => {
+  assert.deepEqual(partitionSessions(undefined, undefined), { active: [], idle: [], archived: [] });
+  const g = partitionSessions({ x: { status: 'idle', last_update: 'lixo' } }, {});
+  assert.deepEqual(g.idle.map(e => e.id), ['x']);
 });
 
 // --- formatElapsed -------------------------------------------------------------
