@@ -235,6 +235,70 @@ function handleTodo(sessions, payload) {
   entry.last_update = new Date().toISOString();
 }
 
+// Tickets do spine: work/features/<slug>/issues/NN-<slug>.md (ver
+// docs/agents/issue-tracker.md do spine). O status do ticket e a linha
+// "**Status:** ready-for-agent | in-progress | done"; os criterios sao
+// checkboxes "- [ ]" / "- [x]".
+const TICKET_FILE_RE = /[\\/]work[\\/]features[\\/]([^\\/]+)[\\/]issues[\\/](\d+)-[^\\/]+\.md$/;
+const TICKET_STATUS_RE = /^\**Status:\**\s*([\w-]+)/im;
+const TICKET_TITLE_RE = /^#\s+(?:\d+\s*:\s*)?(.+)$/m;
+
+function isTicketFile(filePath) {
+  return typeof filePath === 'string' && TICKET_FILE_RE.test(filePath);
+}
+
+// Criterios todos marcados valem mais que a linha Status: a skill pode
+// marcar os checkboxes e esquecer de virar o status para done.
+function parseTicket(content, fileName) {
+  const number = (fileName.match(/^(\d+)-/) || [])[1] || '';
+  const titleMatch = content.match(TICKET_TITLE_RE);
+  const title = titleMatch ? titleMatch[1].trim() : fileName.replace(/\.md$/, '');
+  const statusMatch = content.match(TICKET_STATUS_RE);
+  const rawStatus = statusMatch ? statusMatch[1].toLowerCase() : '';
+  const checked = (content.match(/^- \[x\]/gim) || []).length;
+  const unchecked = (content.match(/^- \[ \]/gm) || []).length;
+
+  let status = 'pending';
+  if (checked > 0 && unchecked === 0) status = 'completed';
+  else if (rawStatus === 'done') status = 'completed';
+  else if (rawStatus === 'in-progress') status = 'in_progress';
+
+  return { content: `${number}: ${title}`, status, checked, total: checked + unchecked };
+}
+
+function readFeatureTickets(ticketPath, fsApi = fs) {
+  const dir = path.dirname(ticketPath);
+  let names;
+  try {
+    names = fsApi.readdirSync(dir).filter(n => /^\d+-.+\.md$/.test(n)).sort();
+  } catch {
+    return [];
+  }
+  const tickets = [];
+  for (const name of names) {
+    try {
+      tickets.push(parseTicket(fsApi.readFileSync(path.join(dir, name), 'utf8'), name));
+    } catch {
+      // ticket ilegivel: segue com os outros
+    }
+  }
+  return tickets;
+}
+
+// Edit/Write num ticket relê a pasta inteira: o painel mostra a lista
+// completa de tickets da feature, nao so o que foi editado.
+function handleSpecTasks(sessions, payload, fsApi = fs) {
+  const entry = sessions[payload.session_id];
+  if (!entry) return;
+  const filePath = payload.tool_input && payload.tool_input.file_path;
+  if (!isTicketFile(filePath)) return;
+  const tickets = readFeatureTickets(filePath, fsApi);
+  if (tickets.length === 0) return;
+  entry.todos = tickets;
+  entry.feature = { slug: filePath.match(TICKET_FILE_RE)[1] };
+  entry.last_update = new Date().toISOString();
+}
+
 const ACTIVE_TTL_MS = 20 * 60 * 1000;
 const DEFAULT_PANEL_PATH = path.join(__dirname, '..', 'panel', 'overwatch.html');
 
@@ -267,6 +331,7 @@ const EVENT_HANDLERS = {
   idle: handleIdle,
   'session-end': handleSessionEnd,
   statusline: handleStatusline,
+  'spec-tasks': handleSpecTasks,
 };
 
 function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
@@ -274,6 +339,10 @@ function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
   const handler = EVENT_HANDLERS[event];
   const payload = readStdinJson(event, dataDir);
   if (!handler) return;
+  // spec-tasks fires on every Edit/Write in every session, for any project -
+  // filter by file_path before touching the sessions.js lock so editing
+  // unrelated files never pays that cost.
+  if (event === 'spec-tasks' && !isTicketFile(payload.tool_input && payload.tool_input.file_path)) return;
   withSessionsLock(dataDir, sessions => handler(sessions, payload));
   // SPEC_DEVIATION: design.md originally called openPanelIfFirstSession from
   // inside handleSessionStart. Moved here so the pure handler stays free of
@@ -301,6 +370,10 @@ module.exports = {
   handleSessionEnd,
   handleStatusline,
   handleTodo,
+  isTicketFile,
+  parseTicket,
+  readFeatureTickets,
+  handleSpecTasks,
   isAnyOtherSessionActive,
   openPanelIfFirstSession,
   main,

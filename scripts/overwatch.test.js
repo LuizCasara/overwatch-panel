@@ -24,6 +24,9 @@ const {
   handleSessionEnd,
   handleStatusline,
   handleTodo,
+  isTicketFile,
+  parseTicket,
+  handleSpecTasks,
   isAnyOtherSessionActive,
   openPanelIfFirstSession,
 } = require('./overwatch.js');
@@ -347,6 +350,124 @@ test('handleTodo writes an empty array when tool_input.todos is malformed', () =
   assert.deepEqual(sessions.abc.todos, []);
 });
 
+// --- isTicketFile -----------------------------------------------------------
+
+test('isTicketFile matches a Unix-style spine ticket path', () => {
+  assert.equal(isTicketFile('/c/projects/sencia/work/features/importacao-nfe/issues/01-entrada.md'), true);
+});
+
+test('isTicketFile matches a Windows-style spine ticket path', () => {
+  assert.equal(
+    isTicketFile('C:\\projects\\sencia\\work\\features\\importacao-nfe\\issues\\12-zip-de-xmls.md'),
+    true,
+  );
+});
+
+test('isTicketFile rejects the spec and progresso.md of the same feature', () => {
+  assert.equal(isTicketFile('C:\\projects\\sencia\\work\\features\\importacao-nfe\\13-10-2026-importacao-nfe.md'), false);
+  assert.equal(isTicketFile('C:\\projects\\sencia\\work\\features\\importacao-nfe\\progresso.md'), false);
+});
+
+test('isTicketFile rejects an unnumbered file inside issues/ and non-string input', () => {
+  assert.equal(isTicketFile('C:\\projects\\sencia\\work\\features\\x\\issues\\README.md'), false);
+  assert.equal(isTicketFile(undefined), false);
+});
+
+// --- parseTicket ------------------------------------------------------------
+
+const TICKET_READY = [
+  '# 03: Ler XML e mostrar conferencia',
+  '',
+  '**What to build:** x',
+  '',
+  '**Blocked by:** None',
+  '',
+  '**Status:** ready-for-agent',
+  '',
+  '- [ ] primeiro',
+  '- [ ] segundo',
+].join('\n');
+
+test('parseTicket reads number, title and a ready-for-agent ticket as pending', () => {
+  assert.deepEqual(parseTicket(TICKET_READY, '03-ler-xml.md'), {
+    content: '03: Ler XML e mostrar conferencia',
+    status: 'pending',
+    checked: 0,
+    total: 2,
+  });
+});
+
+test('parseTicket maps Status: in-progress to in_progress and keeps the checkbox count', () => {
+  const content = TICKET_READY.replace('ready-for-agent', 'in-progress').replace('- [ ] primeiro', '- [x] primeiro');
+  const t = parseTicket(content, '03-ler-xml.md');
+  assert.equal(t.status, 'in_progress');
+  assert.equal(t.checked, 1);
+  assert.equal(t.total, 2);
+});
+
+test('parseTicket maps Status: done to completed', () => {
+  assert.equal(parseTicket(TICKET_READY.replace('ready-for-agent', 'done'), '03-x.md').status, 'completed');
+});
+
+test('parseTicket treats all-checked criteria as completed even when Status is stale', () => {
+  const content = TICKET_READY.replace('- [ ] primeiro', '- [x] primeiro').replace('- [ ] segundo', '- [x] segundo');
+  assert.equal(parseTicket(content, '03-x.md').status, 'completed');
+});
+
+test('parseTicket falls back to the file name when there is no title and tolerates a missing Status', () => {
+  const t = parseTicket('sem titulo\n- [ ] a\n', '07-regras-de-borda.md');
+  assert.equal(t.content, '07: 07-regras-de-borda');
+  assert.equal(t.status, 'pending');
+});
+
+// --- handleSpecTasks --------------------------------------------------------
+
+function makeFeatureDir(files) {
+  const root = tmpDir();
+  const dir = path.join(root, 'work', 'features', 'demo', 'issues');
+  fs.mkdirSync(dir, { recursive: true });
+  for (const [name, content] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), content);
+  return dir;
+}
+
+test('handleSpecTasks is a safe no-op for an unknown session_id', () => {
+  const sessions = {};
+  assert.doesNotThrow(() => handleSpecTasks(sessions, { session_id: 'nope', tool_input: { file_path: 'x' } }));
+  assert.deepEqual(sessions, {});
+});
+
+test('handleSpecTasks ignores an edit to a file that is not a ticket', () => {
+  const sessions = { s1: { todos: [] } };
+  handleSpecTasks(sessions, { session_id: 's1', tool_input: { file_path: 'C:\\projects\\site\\Foo.tsx' } });
+  assert.deepEqual(sessions.s1.todos, []);
+});
+
+test('handleSpecTasks loads every ticket of the feature, sorted, and records the slug', () => {
+  const dir = makeFeatureDir({
+    '02-segundo.md': '# 02: Segundo\n\n**Status:** in-progress\n- [ ] a\n',
+    '01-primeiro.md': '# 01: Primeiro\n\n**Status:** done\n- [x] a\n',
+    '03-terceiro.md': '# 03: Terceiro\n\n**Status:** ready-for-agent\n- [ ] a\n',
+    'notes.md': 'nao e ticket',
+  });
+  const sessions = { s1: { todos: [] } };
+  handleSpecTasks(sessions, { session_id: 's1', tool_input: { file_path: path.join(dir, '02-segundo.md') } });
+  assert.deepEqual(
+    sessions.s1.todos.map(t => [t.content, t.status]),
+    [['01: Primeiro', 'completed'], ['02: Segundo', 'in_progress'], ['03: Terceiro', 'pending']],
+  );
+  assert.deepEqual(sessions.s1.feature, { slug: 'demo' });
+  assert.ok(sessions.s1.last_update);
+});
+
+test('handleSpecTasks leaves the session untouched when the folder cannot be read', () => {
+  const sessions = { s1: { todos: [{ content: 'keep', status: 'pending' }] } };
+  handleSpecTasks(sessions, {
+    session_id: 's1',
+    tool_input: { file_path: 'C:\\nao\\existe\\work\\features\\x\\issues\\01-a.md' },
+  });
+  assert.deepEqual(sessions.s1.todos, [{ content: 'keep', status: 'pending' }]);
+});
+
 // --- main (CLI dispatch, exercised as a real subprocess) --------------------
 
 function runOverwatchCli(subEvent, input, homeDir) {
@@ -379,6 +500,41 @@ test('main is a no-op for an unknown sub-event and still exits 0', () => {
 test('main exits 0 for invalid JSON on stdin (never propagates a failure to the hook)', () => {
   const home = tmpDir();
   assert.doesNotThrow(() => runOverwatchCli('session-start', '{not json', home));
+});
+
+test('main loads the feature tickets from a real spine ticket on a spec-tasks event', () => {
+  const home = tmpDir();
+  runOverwatchCli('session-start', JSON.stringify({ session_id: 'cli-spine', cwd: REPO_ROOT }), home);
+
+  const dir = makeFeatureDir({
+    '01-a.md': '# 01: Unica tarefa\n\n**Status:** done\n- [x] feito\n',
+  });
+  runOverwatchCli(
+    'spec-tasks',
+    JSON.stringify({ session_id: 'cli-spine', tool_input: { file_path: path.join(dir, '01-a.md') } }),
+    home,
+  );
+
+  const sessions = loadSessions(dataDirFor(home));
+  assert.deepEqual(sessions['cli-spine'].todos, [
+    { content: '01: Unica tarefa', status: 'completed', checked: 1, total: 1 },
+  ]);
+  assert.deepEqual(sessions['cli-spine'].feature, { slug: 'demo' });
+});
+
+test('main does not touch sessions.js on a spec-tasks event for an unrelated file (no lock overhead on the hot path)', () => {
+  const home = tmpDir();
+  runOverwatchCli('session-start', JSON.stringify({ session_id: 'cli-skip', cwd: REPO_ROOT }), home);
+  const before = loadSessions(dataDirFor(home));
+
+  runOverwatchCli(
+    'spec-tasks',
+    JSON.stringify({ session_id: 'cli-skip', tool_input: { file_path: 'C:\\projects\\site\\components\\Foo.tsx' } }),
+    home,
+  );
+
+  assert.deepEqual(loadSessions(dataDirFor(home)), before);
+  assert.equal(fs.existsSync(lockFilePath(dataDirFor(home))), false);
 });
 
 // --- isAnyOtherSessionActive / openPanelIfFirstSession ----------------------

@@ -11,6 +11,7 @@ const HOOK_TABLE = [
   { event: 'SessionStart', matcher: undefined, subEvent: 'session-start' },
   { event: 'UserPromptSubmit', matcher: undefined, subEvent: 'prompt' },
   { event: 'PostToolUse', matcher: 'TodoWrite', subEvent: 'todo' },
+  { event: 'PostToolUse', matcher: 'Edit|Write', subEvent: 'spec-tasks' },
   { event: 'PreToolUse', matcher: 'AskUserQuestion|ExitPlanMode', subEvent: 'waiting' },
   { event: 'Stop', matcher: undefined, subEvent: 'idle' },
   { event: 'SessionEnd', matcher: undefined, subEvent: 'session-end' },

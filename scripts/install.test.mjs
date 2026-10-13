@@ -25,20 +25,32 @@ function tmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'overwatch-home-test-'));
 }
 
-test('mergeHooks produces all 6 expected hook groups from an empty settings object', () => {
+test('mergeHooks produces all 6 expected hook events from an empty settings object', () => {
   const result = mergeHooks({}, REPO_ROOT);
-  const events = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PreToolUse', 'Stop', 'SessionEnd'];
-  for (const event of events) {
+  const eventGroupCounts = {
+    SessionStart: 1,
+    UserPromptSubmit: 1,
+    PostToolUse: 2, // TodoWrite (todo) + Edit|Write (spec-tasks)
+    PreToolUse: 1,
+    Stop: 1,
+    SessionEnd: 1,
+  };
+  for (const [event, expectedLength] of Object.entries(eventGroupCounts)) {
     assert.ok(Array.isArray(result.hooks[event]), `expected hooks.${event} to be an array`);
-    assert.equal(result.hooks[event].length, 1);
-    assert.equal(result.hooks[event][0].hooks[0].async, true);
-    assert.match(result.hooks[event][0].hooks[0].command, /overwatch\.js/);
+    assert.equal(result.hooks[event].length, expectedLength);
+    for (const group of result.hooks[event]) {
+      assert.equal(group.hooks[0].async, true);
+      assert.match(group.hooks[0].command, /overwatch\.js/);
+    }
   }
 });
 
 test('mergeHooks sets the exact matcher values from the hook table (PostToolUse/PreToolUse)', () => {
   const result = mergeHooks({}, REPO_ROOT);
   assert.equal(result.hooks.PostToolUse[0].matcher, 'TodoWrite');
+  assert.match(result.hooks.PostToolUse[0].hooks[0].command, /overwatch\.js" todo/);
+  assert.equal(result.hooks.PostToolUse[1].matcher, 'Edit|Write');
+  assert.match(result.hooks.PostToolUse[1].hooks[0].command, /overwatch\.js" spec-tasks/);
   assert.equal(result.hooks.PreToolUse[0].matcher, 'AskUserQuestion|ExitPlanMode');
 });
 
@@ -70,10 +82,11 @@ test('mergeHooks preserves pre-existing third-party hook groups', () => {
   // Untouched third-party event.
   assert.deepEqual(result.hooks.SubagentStart, settings.hooks.SubagentStart);
 
-  // PostToolUse keeps the Skill group and gains a second group for TodoWrite.
-  assert.equal(result.hooks.PostToolUse.length, 2);
+  // PostToolUse keeps the Skill group and gains one group per overwatch subEvent.
+  assert.equal(result.hooks.PostToolUse.length, 3);
   assert.deepEqual(result.hooks.PostToolUse[0], settings.hooks.PostToolUse[0]);
   assert.match(result.hooks.PostToolUse[1].hooks[0].command, /overwatch\.js" todo/);
+  assert.match(result.hooks.PostToolUse[2].hooks[0].command, /overwatch\.js" spec-tasks/);
 
   // Stop keeps the notify-stop group and gains a second group for idle.
   assert.equal(result.hooks.Stop.length, 2);
@@ -170,12 +183,16 @@ function runInstallCli(repoRoot, homeDir) {
 test('install.mjs creates settings.json with the expected hooks when none existed', () => {
   const repoRoot = tmpInstallRepoRoot();
   const home = tmpHome();
+  const realConfig = path.join(REAL_REPO_ROOT, 'panel', 'panel-config.js');
+  const realConfigBefore = fs.existsSync(realConfig) ? fs.readFileSync(realConfig, 'utf8') : null;
   runInstallCli(repoRoot, home);
   const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
   assert.ok(Array.isArray(settings.hooks.SessionStart));
   assert.match(settings.hooks.SessionStart[0].hooks[0].command, /overwatch\.js/);
   assert.equal(fs.existsSync(path.join(repoRoot, 'panel', 'panel-config.js')), true);
-  assert.equal(fs.existsSync(path.join(REAL_REPO_ROOT, 'panel', 'panel-config.js')), false);
+  // O repo real pode ja ter um panel-config.js (install real); o teste so garante que nao foi tocado.
+  const realConfigAfter = fs.existsSync(realConfig) ? fs.readFileSync(realConfig, 'utf8') : null;
+  assert.equal(realConfigAfter, realConfigBefore);
 });
 
 test('install.mjs run twice does not duplicate hook groups', () => {
