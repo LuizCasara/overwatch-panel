@@ -313,16 +313,20 @@
     margin-left: 6px;
   }
 
+  section.idle-section h2 { display: flex; align-items: center; }
+  section.idle-section h2 .action { margin-left: auto; }
+
+  /* acoes logo abaixo do cabecalho (que tem altura fixa): o botao nao muda de lugar entre cards */
   .card-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid var(--panel-border);
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--panel-border);
   }
 
-  .card-actions .action {
+  .action {
     font: inherit;
     font-size: 10px;
     text-transform: uppercase;
@@ -336,8 +340,8 @@
     text-decoration: none;
   }
 
-  .card-actions .action:hover { color: var(--text-primary); border-color: var(--text-dim); }
-  .card-actions .action.open:hover { color: var(--status-running); border-color: rgba(53, 182, 255, 0.45); }
+  .action:hover { color: var(--text-primary); border-color: var(--text-dim); }
+  .action.open:hover { color: var(--status-running); border-color: rgba(53, 182, 255, 0.45); }
 
   @media (max-width: 480px) {
     body { padding: 16px 12px 32px; }
@@ -369,7 +373,8 @@
   <main id="active-grid" class="grid"></main>
 
   <section class="idle-section" id="idle-section" hidden>
-    <h2>Ociosas <span class="count" id="idle-count">0</span></h2>
+    <h2>Ociosas <span class="count" id="idle-count">0</span>
+      <button type="button" class="action" id="archive-all">Arquivar todas</button></h2>
     <div id="idle-grid" class="grid"></div>
   </section>
 
@@ -416,17 +421,24 @@
     } catch (e) { /* sem storage: vale so ate recarregar */ }
   }
 
-  function setArchived(id, archived) {
+  function setArchived(ids, archived) {
     var map = loadArchive();
-    if (archived) {
-      var s = lastSessions[id];
-      map[id] = (s && s.last_update) || new Date().toISOString();
-    } else {
-      delete map[id];
-    }
+    ids.forEach(function (id) {
+      if (archived) {
+        var s = lastSessions[id];
+        map[id] = (s && s.last_update) || new Date().toISOString();
+      } else {
+        delete map[id];
+      }
+    });
     saveArchive(map);
     render(lastSessions);
   }
+
+  var idleIds = [];
+  document.getElementById('archive-all').addEventListener('click', function () {
+    setArchived(idleIds, true);
+  });
   var emptyState = document.getElementById('empty-state');
   var configMissing = document.getElementById('config-missing');
 
@@ -660,7 +672,7 @@
       toggle.className = 'action';
       toggle.textContent = mode === 'archived' ? 'Desarquivar' : 'Arquivar';
       toggle.addEventListener('click', function () {
-        setArchived(id, mode !== 'archived');
+        setArchived([id], mode !== 'archived');
       });
       row.appendChild(toggle);
     }
@@ -670,7 +682,8 @@
   function renderInto(grid, entries, mode) {
     entries.forEach(function (entry) {
       var card = renderCard(entry.session);
-      card.appendChild(renderActions(entry.session, entry.id, mode));
+      var actions = renderActions(entry.session, entry.id, mode);
+      if (actions.children.length > 0) card.insertBefore(actions, card.firstChild.nextSibling);
       grid.appendChild(card);
     });
   }
@@ -693,6 +706,7 @@
     renderInto(activeGrid, groups.active, 'active');
     renderInto(idleGrid, groups.idle, 'idle');
     renderInto(archivedGrid, groups.archived, 'archived');
+    idleIds = groups.idle.map(function (entry) { return entry.id; });
 
     idleCount.textContent = groups.idle.length;
     archivedCount.textContent = groups.archived.length;
