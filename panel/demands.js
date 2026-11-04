@@ -79,6 +79,10 @@
         const demand = bySlug[slug] || (bySlug[slug] = { slug, rm: null, archived_at: null, chats: [] });
         if (demand.rm === null && touch.rm !== undefined && touch.rm !== null) demand.rm = touch.rm;
         if (touch.archived_at) demand.archived_at = touch.archived_at;
+        if (touch.phase && PHASES.includes(touch.phase) && ms(touch.at) >= (demand.phaseAt || -Infinity)) {
+          demand.fasePhase = touch.phase;
+          demand.phaseAt = ms(touch.at);
+        }
         demand.chats.push({ id, session, at: touch.at || session.last_update, phase });
       });
     });
@@ -90,7 +94,7 @@
       demand.chats.sort((a, b) => ms(b.at) - ms(a.at));
       demand.concluded = Boolean(demand.archived_at);
       const withPhase = demand.chats.find(c => c.phase);
-      demand.phase = demand.concluded ? 'concluded' : withPhase ? withPhase.phase : null;
+      demand.phase = demand.concluded ? 'concluded' : demand.fasePhase || (withPhase ? withPhase.phase : null);
       demand.last_at = demand.chats[0].at;
       demands.push(demand);
     });

@@ -430,6 +430,13 @@ function markArchivedDemands(sessions, fsApi = fs) {
     if (!entry || !entry.features_touched || !entry.spine_root) return;
     Object.keys(entry.features_touched).forEach(slug => {
       const touch = entry.features_touched[slug];
+      // Fase da demanda: as skills do spine gravam uma palavra em work/features/<slug>/fase.
+      try {
+        const phase = String(fsApi.readFileSync(path.join(entry.spine_root, 'work', 'features', slug, 'fase'), 'utf8')).trim();
+        if (phase) touch.phase = phase;
+      } catch {
+        // sem arquivo de fase
+      }
       if (touch.archived_at) return;
       try {
         const stat = fsApi.statSync(path.join(entry.spine_root, 'work', 'archive', slug));

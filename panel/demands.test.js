@@ -115,3 +115,12 @@ test('empty or invalid input yields empty groups', () => {
   assert.deepEqual(groupByDemand(null, { nowMs: NOW }), { demands: [], loose: [] });
   assert.deepEqual(groupByDemand({ a: null }, { nowMs: NOW }), { demands: [], loose: [] });
 });
+
+test('the demand phase comes from the phase file, ahead of the skills the chat ran', () => {
+  const sessions = {
+    a: { last_update: '2026-11-04T10:00:00Z', skills: [{ name: 'implement-spec', at: '2026-11-04T09:00:00Z' }],
+      features_touched: { one: { at: '2026-11-04T10:00:00Z', phase: 'manual-test' } } },
+  };
+  const { demands } = require('./demands.js').groupByDemand(sessions, { nowMs: Date.parse('2026-11-04T11:00:00Z') });
+  assert.equal(demands[0].phase, 'manual-test');
+});

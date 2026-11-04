@@ -52,3 +52,14 @@ test('markArchivedDemands flags a touched demand whose folder moved to work/arch
   assert.ok(Date.parse(sessions.s1.features_touched.one.archived_at) > 0);
   assert.equal(sessions.s1.features_touched.two.archived_at, undefined);
 });
+
+test('markArchivedDemands reads the phase from work/features/<slug>/fase', () => {
+  const root = spine(['one']);
+  const sessions = { s1: {} };
+  handleSpecTasks(sessions, edit(root, 'one'));
+  markArchivedDemands(sessions);
+  assert.equal(sessions.s1.features_touched.one.phase, undefined);
+  fs.writeFileSync(path.join(root, 'work', 'features', 'one', 'fase'), 'manual-test\n');
+  markArchivedDemands(sessions);
+  assert.equal(sessions.s1.features_touched.one.phase, 'manual-test');
+});
