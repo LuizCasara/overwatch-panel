@@ -412,10 +412,33 @@ function handleSpecTasks(sessions, payload, fsApi = fs) {
   };
   const rm = readRmCode(featureDir, specNames, fsApi);
   if (rm !== null) entry.feature.rm = rm;
+  // A feature acima e so a ultima; o painel agrupa por demanda e um chat
+  // pode tocar varias (ver panel/demands.js).
+  if (!entry.features_touched) entry.features_touched = {};
+  entry.features_touched[slug] = { ...entry.features_touched[slug], at: new Date().toISOString() };
+  if (rm !== null) entry.features_touched[slug].rm = rm;
   // <spine>/work/features/<slug> -> <spine>: o refresh do RM precisa achar repos.yaml e scripts/roadmap.py
   entry.spine_root = path.resolve(featureDir, '..', '..', '..');
   refreshDerived(sessions, entry);
   entry.last_update = new Date().toISOString();
+}
+
+// Demanda arquivada: o spine move work/features/<slug> para work/archive/<slug>.
+// A data da pasta arquivada alimenta a expiracao de 7 dias do painel.
+function markArchivedDemands(sessions, fsApi = fs) {
+  Object.values(sessions).forEach(entry => {
+    if (!entry || !entry.features_touched || !entry.spine_root) return;
+    Object.keys(entry.features_touched).forEach(slug => {
+      const touch = entry.features_touched[slug];
+      if (touch.archived_at) return;
+      try {
+        const stat = fsApi.statSync(path.join(entry.spine_root, 'work', 'archive', slug));
+        touch.archived_at = stat.mtime.toISOString();
+      } catch {
+        // nao arquivada
+      }
+    });
+  });
 }
 
 // --- Fluxo do spine: skills, agentes e subagentes ---------------------------
@@ -634,6 +657,7 @@ function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
   let refresh = null;
   withSessionsLock(dataDir, sessions => {
     handler(sessions, payload);
+    if (event === 'prompt' || event === 'idle') markArchivedDemands(sessions);
     const entry = sessions[payload.session_id];
     if (entry && RM_REFRESH_EVENTS.has(event) && needsRmRefresh(entry)) {
       // Reserva a vez ainda sob o lock: hooks em sequencia nao disparam N refreshes.
@@ -673,6 +697,7 @@ module.exports = {
   readContextFromTranscript,
   parseTicket,
   handleSpecTasks,
+  markArchivedDemands,
   readRmCode,
   needsRmRefresh,
   spawnRmRefresh,
