@@ -583,7 +583,7 @@ test('handleSkill sets kind and a flow with the last invoked stage as current', 
   assert.equal(byId.grill, 'done');
   assert.equal(byId.spec, 'current');
   assert.equal(byId.tickets, 'pending');
-  assert.equal(sessions.s1.flow.length, 7);
+  assert.equal(sessions.s1.flow.length, 9);
 });
 
 test('computeFlow merges skills of every session on the same feature and uses artifacts as evidence', () => {

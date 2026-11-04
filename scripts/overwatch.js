@@ -449,7 +449,7 @@ function markArchivedDemands(sessions, fsApi = fs) {
 }
 
 // --- Fluxo do spine: skills, agentes e subagentes ---------------------------
-// Fluxo: grill -> spec -> tickets -> implement -> review -> commit -> retro
+// Fluxo: grill -> spec -> tickets -> implement -> review -> validate -> ship -> commit -> retro
 // (CLAUDE.md do spine, secao Agent skills).
 
 const FLOW_STAGES = [
@@ -458,6 +458,8 @@ const FLOW_STAGES = [
   { id: 'tickets', label: 'tickets', skills: ['to-tickets'] },
   { id: 'implement', label: 'implement', skills: ['implement', 'implement-spec'] },
   { id: 'review', label: 'review', skills: ['code-review'] },
+  { id: 'validate', label: 'validate', skills: ['validate'] },
+  { id: 'ship', label: 'ship', skills: ['ship'] },
   { id: 'commit', label: 'commit', skills: ['commit', 'pr'] },
   { id: 'retro', label: 'retro', skills: ['retro'] },
 ];
