@@ -53,6 +53,24 @@ test('markArchivedDemands flags a touched demand whose folder moved to work/arch
   assert.equal(sessions.s1.features_touched.two.archived_at, undefined);
 });
 
+test('markArchivedDemands dates the archive by the fase file, not by the folder mtime', () => {
+  const root = spine(['one']);
+  const sessions = { s1: {} };
+  handleSpecTasks(sessions, edit(root, 'one'));
+  const dir = path.join(root, 'work', 'features', 'one');
+  fs.writeFileSync(path.join(dir, 'fase'), 'ship\n');
+  const fixed = new Date('2026-10-01T10:00:00Z');
+  fs.utimesSync(path.join(dir, 'fase'), fixed, fixed);
+  fs.mkdirSync(path.join(root, 'work', 'archive'), { recursive: true });
+  fs.renameSync(dir, path.join(root, 'work', 'archive', 'one'));
+  fs.writeFileSync(path.join(root, 'work', 'archive', 'one', 'later.txt'), 'x'); // mexe no mtime da pasta
+  markArchivedDemands(sessions);
+  assert.equal(sessions.s1.features_touched.one.archived_at, fixed.toISOString());
+  fs.writeFileSync(path.join(root, 'work', 'archive', 'one', 'later2.txt'), 'y');
+  markArchivedDemands(sessions);
+  assert.equal(sessions.s1.features_touched.one.archived_at, fixed.toISOString());
+});
+
 test('markArchivedDemands reads the phase from work/features/<slug>/fase', () => {
   const root = spine(['one']);
   const sessions = { s1: {} };

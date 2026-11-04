@@ -424,12 +424,32 @@ function handleSpecTasks(sessions, payload, fsApi = fs) {
 }
 
 // Demanda arquivada: o spine move work/features/<slug> para work/archive/<slug>.
-// A data da pasta arquivada alimenta a expiracao de 7 dias do painel.
+// A data de arquivamento alimenta a expiracao de 7 dias do painel: vem do arquivo `fase`
+// (ou do spec), que o mv preserva; o mtime da pasta reiniciaria a cada arquivo gravado nela.
+// mtime do arquivo `fase`, ou do spec; so se nenhum existir, o da pasta.
+function archivedAt(archiveDir, fsApi) {
+  const candidates = ['fase'];
+  try {
+    candidates.push(...fsApi.readdirSync(archiveDir).filter(n => SPEC_FILE_RE.test(n)));
+  } catch {
+    // pasta ilegivel
+  }
+  for (const name of candidates) {
+    try {
+      return fsApi.statSync(path.join(archiveDir, name)).mtime.toISOString();
+    } catch {
+      // proximo candidato
+    }
+  }
+  return fsApi.statSync(archiveDir).mtime.toISOString();
+}
+
 function markArchivedDemands(sessions, fsApi = fs) {
   Object.values(sessions).forEach(entry => {
     if (!entry || !entry.features_touched || !entry.spine_root) return;
     Object.keys(entry.features_touched).forEach(slug => {
       const touch = entry.features_touched[slug];
+      if (touch.archived_at) return;
       // Fase da demanda: as skills do spine gravam uma palavra em work/features/<slug>/fase.
       try {
         const phase = String(fsApi.readFileSync(path.join(entry.spine_root, 'work', 'features', slug, 'fase'), 'utf8')).trim();
@@ -437,13 +457,13 @@ function markArchivedDemands(sessions, fsApi = fs) {
       } catch {
         // sem arquivo de fase
       }
-      if (touch.archived_at) return;
+      const archiveDir = path.join(entry.spine_root, 'work', 'archive', slug);
       try {
-        const stat = fsApi.statSync(path.join(entry.spine_root, 'work', 'archive', slug));
-        touch.archived_at = stat.mtime.toISOString();
+        fsApi.statSync(archiveDir);
       } catch {
-        // nao arquivada
+        return; // nao arquivada
       }
+      touch.archived_at = archivedAt(archiveDir, fsApi);
     });
   });
 }

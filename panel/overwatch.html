@@ -689,11 +689,6 @@
     concluded: 'concluida',
   };
 
-  function formatDay(iso) {
-    var d = new Date(iso);
-    return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  }
-
   function renderDemand(demand) {
     var article = document.createElement('article');
     article.className = 'card';
@@ -733,7 +728,7 @@
         ? '<a href="' + VSCODE_OPEN_URL + sid + '" title="Abre esta conversa no VS Code">' + label + '</a>'
         : label;
       li.innerHTML =
-        '<span class="when">' + formatDay(chat.at) + '</span>' +
+        '<span class="when">' + window.OverwatchFormat.formatDay(chat.at) + '</span>' +
         '<span class="text">' + text + '</span>' +
         (chat.phase ? '<span class="chip phase">' + escapeHtml(PHASE_LABEL[chat.phase] || chat.phase) + '</span>' : '');
       ul.appendChild(li);

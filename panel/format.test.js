@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { formatElapsed, extractSubProgress, computeOverallProgress, isExpired, partitionSessions } = require('./format.js');
+const { formatElapsed, extractSubProgress, computeOverallProgress, isExpired, partitionSessions, formatDay } = require('./format.js');
 
 // --- extractSubProgress ------------------------------------------------------
 
@@ -88,6 +88,14 @@ test('formatElapsed formats minutes under an hour and hours+minutes over it', ()
   const now = Date.now();
   assert.equal(formatElapsed(new Date(now - 12 * 60 * 1000).toISOString(), now), '12min');
   assert.equal(formatElapsed(new Date(now - 64 * 60 * 1000).toISOString(), now), '1h 04min');
+});
+
+// --- formatDay ------------------------------------------------------------------
+
+test('formatDay returns dd/mm and a dash for invalid dates', () => {
+  assert.equal(formatDay('2026-11-04T12:00:00Z'), '04/11');
+  assert.equal(formatDay('lixo'), '—');
+  assert.equal(formatDay(undefined), '—');
 });
 
 // --- UMD / require-ability ------------------------------------------------------
