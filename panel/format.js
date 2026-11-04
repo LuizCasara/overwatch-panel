@@ -71,5 +71,12 @@
     return out;
   }
 
-  return { formatElapsed, extractSubProgress, computeOverallProgress, isExpired, partitionSessions };
+  // "dd/mm" de uma data ISO; '—' quando invalida.
+  function formatDay(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  }
+
+  return { formatElapsed, extractSubProgress, computeOverallProgress, isExpired, partitionSessions, formatDay };
 });

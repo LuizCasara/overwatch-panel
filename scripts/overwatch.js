@@ -448,14 +448,64 @@ function handleSpecTasks(sessions, payload, fsApi = fs) {
   };
   const rm = readRmCode(featureDir, specNames, fsApi);
   if (rm !== null) entry.feature.rm = rm;
+  // A feature acima e so a ultima; o painel agrupa por demanda e um chat
+  // pode tocar varias (ver panel/demands.js).
+  if (!entry.features_touched) entry.features_touched = {};
+  entry.features_touched[slug] = { ...entry.features_touched[slug], at: new Date().toISOString() };
+  if (rm !== null) entry.features_touched[slug].rm = rm;
   // <spine>/work/features/<slug> -> <spine>: o refresh do RM precisa achar repos.yaml e scripts/roadmap.py
   entry.spine_root = path.resolve(featureDir, '..', '..', '..');
   refreshDerived(sessions, entry);
   entry.last_update = new Date().toISOString();
 }
 
+// Demanda arquivada: o spine move work/features/<slug> para work/archive/<slug>.
+// A data de arquivamento alimenta a expiracao de 7 dias do painel: vem do arquivo `fase`
+// (ou do spec), que o mv preserva; o mtime da pasta reiniciaria a cada arquivo gravado nela.
+// mtime do arquivo `fase`, ou do spec; so se nenhum existir, o da pasta.
+function archivedAt(archiveDir, fsApi) {
+  const candidates = ['fase'];
+  try {
+    candidates.push(...fsApi.readdirSync(archiveDir).filter(n => SPEC_FILE_RE.test(n)));
+  } catch {
+    // pasta ilegivel
+  }
+  for (const name of candidates) {
+    try {
+      return fsApi.statSync(path.join(archiveDir, name)).mtime.toISOString();
+    } catch {
+      // proximo candidato
+    }
+  }
+  return fsApi.statSync(archiveDir).mtime.toISOString();
+}
+
+function markArchivedDemands(sessions, fsApi = fs) {
+  Object.values(sessions).forEach(entry => {
+    if (!entry || !entry.features_touched || !entry.spine_root) return;
+    Object.keys(entry.features_touched).forEach(slug => {
+      const touch = entry.features_touched[slug];
+      if (touch.archived_at) return;
+      // Fase da demanda: as skills do spine gravam uma palavra em work/features/<slug>/fase.
+      try {
+        const phase = String(fsApi.readFileSync(path.join(entry.spine_root, 'work', 'features', slug, 'fase'), 'utf8')).trim();
+        if (phase) touch.phase = phase;
+      } catch {
+        // sem arquivo de fase
+      }
+      const archiveDir = path.join(entry.spine_root, 'work', 'archive', slug);
+      try {
+        fsApi.statSync(archiveDir);
+      } catch {
+        return; // nao arquivada
+      }
+      touch.archived_at = archivedAt(archiveDir, fsApi);
+    });
+  });
+}
+
 // --- Fluxo do spine: skills, agentes e subagentes ---------------------------
-// Fluxo: grill -> spec -> tickets -> implement -> review -> commit -> retro
+// Fluxo: grill -> spec -> tickets -> implement -> review -> validate -> ship -> commit -> retro
 // (CLAUDE.md do spine, secao Agent skills).
 
 const FLOW_STAGES = [
@@ -464,6 +514,8 @@ const FLOW_STAGES = [
   { id: 'tickets', label: 'tickets', skills: ['to-tickets'] },
   { id: 'implement', label: 'implement', skills: ['implement', 'implement-spec'] },
   { id: 'review', label: 'review', skills: ['code-review'] },
+  { id: 'validate', label: 'validate', skills: ['validate'] },
+  { id: 'ship', label: 'ship', skills: ['ship'] },
   { id: 'commit', label: 'commit', skills: ['commit', 'pr'] },
   { id: 'retro', label: 'retro', skills: ['retro'] },
 ];
@@ -670,6 +722,7 @@ function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
   let refresh = null;
   withSessionsLock(dataDir, sessions => {
     handler(sessions, payload);
+    if (event === 'prompt' || event === 'idle') markArchivedDemands(sessions);
     const entry = sessions[payload.session_id];
     if (entry && RM_REFRESH_EVENTS.has(event) && needsRmRefresh(entry)) {
       // Reserva a vez ainda sob o lock: hooks em sequencia nao disparam N refreshes.
@@ -709,6 +762,7 @@ module.exports = {
   readContextFromTranscript,
   parseTicket,
   handleSpecTasks,
+  markArchivedDemands,
   readRmCode,
   needsRmRefresh,
   spawnRmRefresh,

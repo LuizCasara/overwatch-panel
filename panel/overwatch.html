@@ -287,6 +287,23 @@
     font-weight: 700;
   }
 
+  section.demands-section { margin-bottom: 40px; }
+  section.demands-section h2 {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    margin: 0 0 12px;
+  }
+  .demand-chats { list-style: none; margin: 0; padding: 0; font-size: 11px; }
+  .demand-chats li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
+  .demand-chats .when { color: var(--text-dim); white-space: nowrap; }
+  .demand-chats .text { overflow-wrap: anywhere; flex: 1; }
+  .demand-chats a { color: var(--text-primary); }
+  .chip.phase { color: var(--status-waiting); border-color: rgba(242, 201, 76, 0.45); }
+  .chip.concluded { color: var(--status-done); border-color: rgba(61, 220, 132, 0.45); }
+
   section.idle-section { margin-top: 40px; }
 
   section.idle-section h2,
@@ -370,6 +387,11 @@
 
   <div id="empty-state" hidden>Nenhuma sessao registrada ainda.</div>
 
+  <section class="demands-section" id="demands-section" hidden>
+    <h2>Demandas <span class="count" id="demands-count">0</span></h2>
+    <div id="demands-grid" class="grid"></div>
+  </section>
+
   <main id="active-grid" class="grid"></main>
 
   <section class="idle-section" id="idle-section" hidden>
@@ -385,6 +407,7 @@
 </div>
 <script src="panel-config.js"></script>
 <script src="format.js"></script>
+<script src="demands.js"></script>
 <script>
 (function () {
   'use strict';
@@ -394,6 +417,9 @@
   var idleGrid = document.getElementById('idle-grid');
   var idleSection = document.getElementById('idle-section');
   var idleCount = document.getElementById('idle-count');
+  var demandsGrid = document.getElementById('demands-grid');
+  var demandsSection = document.getElementById('demands-section');
+  var demandsCount = document.getElementById('demands-count');
   var archivedGrid = document.getElementById('archived-grid');
   var archivedSection = document.getElementById('archived-section');
   var archivedCount = document.getElementById('archived-count');
@@ -654,6 +680,63 @@
     return article;
   }
 
+  var PHASE_LABEL = {
+    implement: 'implementacao',
+    review: 'revisao',
+    validate: 'validacao',
+    'manual-test': 'teste manual',
+    ship: 'ship',
+    concluded: 'concluida',
+  };
+
+  function renderDemand(demand) {
+    var article = document.createElement('article');
+    article.className = 'card';
+    article.style.setProperty('--accent', demand.concluded ? 'var(--status-done)' : 'var(--status-running)');
+
+    var header = document.createElement('div');
+    header.className = 'card-header';
+    header.innerHTML =
+      '<div class="card-title"><span class="project">' + escapeHtml(demand.slug) + '</span></div>' +
+      '<div class="card-meta"><span>' + demand.chats.length + ' chat(s)</span></div>';
+    article.appendChild(header);
+
+    var chips = document.createElement('div');
+    chips.className = 'rm-row';
+    var html = '';
+    if (demand.rm) html += '<span class="chip rm">RM-' + escapeHtml(demand.rm) + '</span>';
+    if (demand.phase) {
+      html += '<span class="chip ' + (demand.concluded ? 'concluded' : 'phase') + '">' +
+        escapeHtml(PHASE_LABEL[demand.phase] || demand.phase) + '</span>';
+    }
+    // O status do board e os merges vem do chat que tem o RM carregado.
+    var withRm = demand.chats.filter(function (c) { return c.session.rm && c.session.rm.code === demand.rm; })[0];
+    if (withRm && withRm.session.rm.status) {
+      html += '<span class="chip ' + (RM_STATUS_CLASS[withRm.session.rm.status] || '') + '">' +
+        escapeHtml(withRm.session.rm.status) + '</span>';
+    }
+    chips.innerHTML = html;
+    article.appendChild(chips);
+
+    var ul = document.createElement('ul');
+    ul.className = 'demand-chats';
+    demand.chats.forEach(function (chat) {
+      var sid = chat.session.session_id || chat.id;
+      var li = document.createElement('li');
+      var label = escapeHtml(chat.session.summary || '(sem prompt)');
+      var text = SESSION_ID_RE.test(sid)
+        ? '<a href="' + VSCODE_OPEN_URL + sid + '" title="Abre esta conversa no VS Code">' + label + '</a>'
+        : label;
+      li.innerHTML =
+        '<span class="when">' + window.OverwatchFormat.formatDay(chat.at) + '</span>' +
+        '<span class="text">' + text + '</span>' +
+        (chat.phase ? '<span class="chip phase">' + escapeHtml(PHASE_LABEL[chat.phase] || chat.phase) + '</span>' : '');
+      ul.appendChild(li);
+    });
+    article.appendChild(ul);
+    return article;
+  }
+
   function renderActions(session, id, mode) {
     var row = document.createElement('div');
     row.className = 'card-actions';
@@ -701,6 +784,12 @@
       archivedSection.hidden = true;
       return;
     }
+
+    var demands = window.OverwatchDemands.groupByDemand(lastSessions, { nowMs: Date.now() }).demands;
+    demandsGrid.innerHTML = '';
+    demands.forEach(function (demand) { demandsGrid.appendChild(renderDemand(demand)); });
+    demandsCount.textContent = demands.length;
+    demandsSection.hidden = demands.length === 0;
 
     var groups = window.OverwatchFormat.partitionSessions(lastSessions, loadArchive(), Date.now());
     renderInto(activeGrid, groups.active, 'active');
