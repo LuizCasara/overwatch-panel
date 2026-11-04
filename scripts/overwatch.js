@@ -242,6 +242,8 @@ function handleSessionStart(sessions, payload) {
   };
 }
 
+const SYSTEM_PROMPT_RE = /^\s*<(?:task-notification|agent-message|system-reminder|browser_instruction|command-)/;
+
 function handlePrompt(sessions, payload) {
   const sessionId = payload.session_id;
   if (!sessionId) return;
@@ -249,7 +251,11 @@ function handlePrompt(sessions, payload) {
     handleSessionStart(sessions, payload);
   }
   const prompt = typeof payload.prompt === 'string' ? payload.prompt : '';
-  sessions[sessionId].summary = prompt.slice(0, 80);
+  // Notificacao de tarefa, retorno de subagente e contexto injetado nao sao fala do usuario:
+  // mantem o resumo anterior.
+  if (!SYSTEM_PROMPT_RE.test(prompt)) {
+    sessions[sessionId].summary = prompt.slice(0, 80);
+  }
   sessions[sessionId].status = 'running';
   sessions[sessionId].ended_at = null;
   sessions[sessionId].last_update = new Date().toISOString();
@@ -366,6 +372,36 @@ function isFeatureFile(filePath) {
   return typeof filePath === 'string' && FEATURE_DIR_RE.test(filePath);
 }
 
+// Skills de implementacao atualizam tickets por `sed -i` / `cat >>` no Bash,
+// nao por Edit/Write. O comando que muda algo dentro de work/features/<slug>/
+// vira um caminho sintetico da pasta da feature para o mesmo handler.
+const BASH_FEATURE_DIR_RE = /((?:[A-Za-z]:|\/[A-Za-z])?[\\/][^\s'"<>|;&]*?work[\\/]features[\\/][^\\/\s'"<>|;&]+)/;
+const BASH_FEATURE_REL_RE = /(?:^|[\s'"])((?:\.[\\/])?work[\\/]features[\\/][^\\/\s'"<>|;&]+)/;
+const BASH_MUTATION_RE = /\bsed\s+(?:-\w*i|--in-place)|>>?(?!&)|\btee\b|\b(?:mv|cp|rm|touch)\b|\bgit\s+(?:checkout|restore|apply|stash|merge|reset)\b/;
+
+function bashFeatureDir(payload) {
+  const command = payload.tool_input && payload.tool_input.command;
+  if (typeof command !== 'string' || !BASH_MUTATION_RE.test(command.replace(/\d?>&\d|\d?>\s*\/dev\/null/g, ''))) return null;
+  let dir = (command.match(BASH_FEATURE_DIR_RE) || [])[1];
+  if (!dir) {
+    const rel = (command.match(BASH_FEATURE_REL_RE) || [])[1];
+    if (!rel || typeof payload.cwd !== 'string') return null;
+    dir = path.join(payload.cwd, rel);
+  }
+  // Git Bash: /c/projects/... -> C:/projects/...
+  return dir.replace(/^\/([A-Za-z])(?=[\\/])/, '$1:');
+}
+
+// Caminho do arquivo da feature que o evento tocou (Edit/Write) ou da pasta
+// da feature (Bash); null quando o evento nao e sobre uma feature.
+function featureFilePath(payload) {
+  const filePath = payload.tool_input && payload.tool_input.file_path;
+  if (isFeatureFile(filePath)) return filePath;
+  if (payload.tool_name !== 'Bash') return null;
+  const dir = bashFeatureDir(payload);
+  return dir ? path.join(dir, '_') : null;
+}
+
 // O codigo do board ("(RM-142)") fica no titulo da spec; o progresso.md e o
 // segundo lugar. So o comeco do arquivo: o codigo vem no titulo.
 const RM_CODE_RE = /\bRM-(\d+)\b/;
@@ -389,8 +425,8 @@ function readRmCode(featureDir, specNames, fsApi = fs) {
 function handleSpecTasks(sessions, payload, fsApi = fs) {
   const entry = sessions[payload.session_id];
   if (!entry) return;
-  const filePath = payload.tool_input && payload.tool_input.file_path;
-  if (!isFeatureFile(filePath)) return;
+  const filePath = featureFilePath(payload);
+  if (!filePath) return;
   const [, featureDir, slug] = filePath.match(FEATURE_DIR_RE);
 
   const tickets = readFeatureTickets(path.join(featureDir, 'issues'), fsApi);
@@ -630,7 +666,7 @@ function main(dataDir = DEFAULT_DATA_DIR, panelPath = DEFAULT_PANEL_PATH) {
   // spec-tasks fires on every Edit/Write in every session, for any project -
   // filter by file_path before touching the sessions.js lock so editing
   // unrelated files never pays that cost.
-  if (event === 'spec-tasks' && !isFeatureFile(payload.tool_input && payload.tool_input.file_path)) return;
+  if (event === 'spec-tasks' && !featureFilePath(payload)) return;
   let refresh = null;
   withSessionsLock(dataDir, sessions => {
     handler(sessions, payload);
@@ -677,6 +713,7 @@ module.exports = {
   needsRmRefresh,
   spawnRmRefresh,
   isFeatureFile,
+  featureFilePath,
   readFeatureTickets,
   computeKind,
   computeFlow,

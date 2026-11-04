@@ -50,7 +50,7 @@ Além das sessões, o painel entende o fluxo do spine (`CLAUDE.md` do spine):
 
 | Hook | Evento interno | O que alimenta |
 |---|---|---|
-| `PostToolUse` `Edit\|Write` em `work/features/<slug>/…` | `spec-tasks` | feature (`slug`, spec, tickets feitos/total) e a lista de tickets (`issues/NN-*.md`: `Status:` + checkboxes) |
+| `PostToolUse` `Edit\|Write\|Bash` em `work/features/<slug>/…` (Bash: só comandos que alteram, ex. `sed -i`, `>>`) | `spec-tasks` | feature (`slug`, spec, tickets feitos/total) e a lista de tickets (`issues/NN-*.md`: `Status:` + checkboxes) |
 | `PostToolUse` `Skill` | `skill` | skills usadas, `kind` (feature / bugfix) e o fluxo grill → spec → tickets → implement → review → commit → retro |
 | `PreToolUse` `Agent\|Task` + `SubagentStart` / `SubagentStop` | `agent-launch`, `subagent-start`, `subagent-stop` | subagentes rodando/concluídos, com descrição e resumo |
 | `Stop` / `UserPromptSubmit` | `idle`, `prompt` | `context_pct` calculado do transcript (o statusline não roda na extensão do VS Code) |

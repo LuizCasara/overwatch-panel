@@ -30,7 +30,7 @@ test('mergeHooks produces all 6 expected hook events from an empty settings obje
   const eventGroupCounts = {
     SessionStart: 1,
     UserPromptSubmit: 1,
-    PostToolUse: 3, // TodoWrite (todo) + Edit|Write (spec-tasks) + Skill (skill)
+    PostToolUse: 3, // TodoWrite (todo) + Edit|Write|Bash (spec-tasks) + Skill (skill)
     PreToolUse: 2, // waiting + Agent|Task (agent-launch)
     SubagentStart: 1,
     SubagentStop: 1,
@@ -51,7 +51,7 @@ test('mergeHooks sets the exact matcher values from the hook table (PostToolUse/
   const result = mergeHooks({}, REPO_ROOT);
   assert.equal(result.hooks.PostToolUse[0].matcher, 'TodoWrite');
   assert.match(result.hooks.PostToolUse[0].hooks[0].command, /overwatch\.js" todo/);
-  assert.equal(result.hooks.PostToolUse[1].matcher, 'Edit|Write');
+  assert.equal(result.hooks.PostToolUse[1].matcher, 'Edit|Write|Bash');
   assert.match(result.hooks.PostToolUse[1].hooks[0].command, /overwatch\.js" spec-tasks/);
   assert.equal(result.hooks.PostToolUse[2].matcher, 'Skill');
   assert.match(result.hooks.PostToolUse[2].hooks[0].command, /overwatch\.js" skill/);

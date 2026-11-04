@@ -38,6 +38,7 @@ const {
   readContextFromTranscript,
   parseTicket,
   handleSpecTasks,
+  featureFilePath,
   isAnyOtherSessionActive,
   openPanelIfFirstSession,
 } = require('./overwatch.js');
@@ -477,6 +478,39 @@ test('handleSpecTasks leaves the session untouched when the folder cannot be rea
     tool_input: { file_path: 'C:\\nao\\existe\\work\\features\\x\\issues\\01-a.md' },
   });
   assert.deepEqual(sessions.s1.todos, [{ content: 'keep', status: 'pending' }]);
+});
+
+test('handleSpecTasks follows a Bash command that edits a ticket (sed -i), not only Edit/Write', () => {
+  const dir = makeFeatureDir({
+    '01-a.md': '# 01: A\n\n**Status:** done\n- [x] a\n',
+    '02-b.md': '# 02: B\n\n**Status:** in-progress\n- [ ] a\n',
+  });
+  const sessions = { s1: { todos: [] } };
+  const command = `cd ${dir.split(path.sep).join('/')} && sed -i 's/a/b/' 02-*.md`;
+  handleSpecTasks(sessions, { session_id: 's1', tool_name: 'Bash', tool_input: { command } });
+  assert.equal(sessions.s1.feature.slug, 'demo');
+  assert.equal(sessions.s1.feature.tickets_total, 2);
+});
+
+test('featureFilePath: Bash reads and unrelated commands are ignored, MSYS paths are converted', () => {
+  const norm = p => p.split(path.sep).join('/').toLowerCase();
+  const read = { tool_name: 'Bash', tool_input: { command: 'cat /c/projects/sencia/work/features/x/issues/01-a.md' } };
+  assert.equal(featureFilePath(read), null);
+  const other = { tool_name: 'Bash', tool_input: { command: 'sed -i s/a/b/ /c/projects/site/Foo.tsx' } };
+  assert.equal(featureFilePath(other), null);
+  const write = { tool_name: 'Bash', tool_input: { command: "cat >> /c/projects/sencia/work/features/x/spec.md <<'EOF'" } };
+  assert.equal(norm(featureFilePath(write)), 'c:/projects/sencia/work/features/x/_');
+  const rel = { tool_name: 'Bash', cwd: 'C:/projects/sencia', tool_input: { command: 'sed -i s/a/b/ work/features/x/issues/01-a.md' } };
+  assert.equal(norm(featureFilePath(rel)), 'c:/projects/sencia/work/features/x/_');
+});
+
+test('handlePrompt keeps the previous summary on a task-notification', () => {
+  const sessions = {};
+  handlePrompt(sessions, { session_id: 's1', prompt: 'ok a todas!' });
+  handlePrompt(sessions, { session_id: 's1', prompt: '<task-notification>\n<task-id>x</task-id>' });
+  handlePrompt(sessions, { session_id: 's1', prompt: '<agent-message from="a1">[Subagent hand-back]' });
+  assert.equal(sessions.s1.summary, 'ok a todas!');
+  assert.equal(sessions.s1.status, 'running');
 });
 
 // --- readContextFromTranscript / context from transcript ----------------------
